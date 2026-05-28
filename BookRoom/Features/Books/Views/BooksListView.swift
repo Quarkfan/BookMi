@@ -12,6 +12,9 @@ struct BooksListView: View {
     @State private var filterShelfID: String?
     @State private var filterTagID: String?
     @State private var filterReadingStatus: ReadingStatus?
+    @State private var selectedBooks: Set<String> = []
+    @State private var isEditing = false
+    @State private var showBatchActions = false
 
     init() {
         _displayMode = State(initialValue: AppContainer.shared.settings.displayMode)
@@ -37,15 +40,37 @@ struct BooksListView: View {
             .searchable(text: $searchText, prompt: "搜索书名、作者、ISBN...")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        showFilterSheet = true
-                    } label: {
-                        Label("筛选", systemImage: "line.3.horizontal.decrease.circle")
+                    if isEditing {
+                        Button("取消") {
+                            isEditing = false
+                            selectedBooks.removeAll()
+                        }
+                    } else {
+                        Button {
+                            showFilterSheet = true
+                        } label: {
+                            Label("筛选", systemImage: "line.3.horizontal.decrease.circle")
+                        }
+                        .badge(activeFilterCount)
                     }
-                    .badge(activeFilterCount)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    displayModeToggle
+                    if isEditing {
+                        Button("批量操作 (\(selectedBooks.count))") {
+                            showBatchActions = true
+                        }
+                        .disabled(selectedBooks.isEmpty)
+                    } else {
+                        HStack {
+                            displayModeToggle
+
+                            Button {
+                                isEditing = true
+                            } label: {
+                                Image(systemName: "checkmark.circle")
+                            }
+                        }
+                    }
                 }
             }
             .onChange(of: searchText) { _, _ in searchBooks() }
@@ -58,6 +83,9 @@ struct BooksListView: View {
                     onApply: { applyFilters() }
                 )
             }
+            .sheet(isPresented: $showBatchActions) {
+                BatchActionSheet(selectedBookIDs: Array(selectedBooks))
+            }
         }
     }
 
@@ -69,8 +97,24 @@ struct BooksListView: View {
             case .list:
                 List {
                     ForEach(books, id: \.id) { book in
-                        NavigationLink(destination: BookDetailView(book: book)) {
-                            BookRowView(book: book)
+                        if isEditing {
+                            Button {
+                                if selectedBooks.contains(book.id) {
+                                    selectedBooks.remove(book.id)
+                                } else {
+                                    selectedBooks.insert(book.id)
+                                }
+                            } label: {
+                                HStack {
+                                    Image(systemName: selectedBooks.contains(book.id) ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(selectedBooks.contains(book.id) ? .accentColor : .secondary)
+                                    BookRowView(book: book)
+                                }
+                            }
+                        } else {
+                            NavigationLink(destination: BookDetailView(book: book)) {
+                                BookRowView(book: book)
+                            }
                         }
                     }
                 }
@@ -79,8 +123,25 @@ struct BooksListView: View {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 12)], spacing: 12) {
                         ForEach(books, id: \.id) { book in
-                            NavigationLink(destination: BookDetailView(book: book)) {
-                                BookCoverView(book: book)
+                            if isEditing {
+                                Button {
+                                    if selectedBooks.contains(book.id) {
+                                        selectedBooks.remove(book.id)
+                                    } else {
+                                        selectedBooks.insert(book.id)
+                                    }
+                                } label: {
+                                    ZStack(alignment: .topTrailing) {
+                                        BookCoverView(book: book)
+                                        Image(systemName: selectedBooks.contains(book.id) ? "checkmark.circle.fill" : "circle")
+                                            .foregroundStyle(selectedBooks.contains(book.id) ? .accentColor : .white)
+                                            .padding(4)
+                                    }
+                                }
+                            } else {
+                                NavigationLink(destination: BookDetailView(book: book)) {
+                                    BookCoverView(book: book)
+                                }
                             }
                         }
                     }
@@ -215,6 +276,149 @@ struct BooksListView: View {
             case .updatedAt:
                 return a.updatedAt < b.updatedAt ? order == 1 : order == -1
             }
+        }
+    }
+}
+
+// MARK: - Book Row View
+
+struct BookRowView: View {
+    let book: Book
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Cover thumbnail
+            coverImage
+                .frame(width: 50, height: 70)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+
+            // Info
+            VStack(alignment: .leading, spacing: 4) {
+                Text(book.title)
+                    .font(.headline)
+                    .lineLimit(1)
+
+                if let authors = decodeAuthors(book.authorsJSON), !authors.isEmpty {
+                    Text(authors.joined(separator: " / "))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                if let publisher = book.publisher {
+                    Text(publisher)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                HStack(spacing: 8) {
+                    ReadingStatusBadge(status: book.readingStatus)
+                    if book.borrowStatus == .borrowed {
+                        Label("借出", systemImage: "person")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                }
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var coverImage: some View {
+        Group {
+            if let fileName = book.coverFileName {
+                AsyncImage(url: AppPaths.coversURL.appendingPathComponent(fileName)) { image in
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    coverPlaceholder
+                }
+            } else {
+                coverPlaceholder
+            }
+        }
+    }
+
+    private var coverPlaceholder: some View {
+        Rectangle()
+            .fill(Color.gray.opacity(0.2))
+            .overlay(
+                Image(systemName: "book.fill")
+                    .foregroundStyle(.secondary)
+            )
+    }
+
+    private func decodeAuthors(_ json: String?) -> [String]? {
+        guard let json, let data = json.data(using: .utf8),
+              let arr = try? JSONDecoder().decode([String].self, from: data) else {
+            return nil
+        }
+        return arr
+    }
+}
+
+// MARK: - Book Cover View
+
+struct BookCoverView: View {
+    let book: Book
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Group {
+                if let fileName = book.coverFileName {
+                    AsyncImage(url: AppPaths.coversURL.appendingPathComponent(fileName)) { image in
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        coverPlaceholder
+                    }
+                } else {
+                    coverPlaceholder
+                }
+            }
+            .aspectRatio(0.7, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+
+            Text(book.title)
+                .font(.caption)
+                .lineLimit(2)
+                .foregroundStyle(.primary)
+        }
+    }
+
+    private var coverPlaceholder: some View {
+        Rectangle()
+            .fill(Color.gray.opacity(0.2))
+            .overlay(
+                Image(systemName: "book.fill")
+                    .foregroundStyle(.secondary)
+            )
+    }
+}
+
+// MARK: - Reading Status Badge
+
+struct ReadingStatusBadge: View {
+    let status: ReadingStatus
+
+    var body: some View {
+        Text(status.displayName)
+            .font(.caption2)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(statusColor)
+            .foregroundStyle(.white)
+            .clipShape(Capsule())
+    }
+
+    private var statusColor: Color {
+        switch status {
+        case .unread: return .gray
+        case .reading: return .blue
+        case .finished: return .green
+        case .paused: return .orange
+        case .abandoned: return .red
         }
     }
 }

@@ -223,7 +223,7 @@ struct BookDetailView: View {
             // Load purchase channel
             if let channelID = book.purchaseChannelID {
                 purchaseChannel = try appContainer.dbQueue.read { db in
-                    try PurchaseChannel.fetchOne(db, id: channelID)
+                    try PurchaseChannel.fetchOne(db, key: channelID)
                 }
             }
 

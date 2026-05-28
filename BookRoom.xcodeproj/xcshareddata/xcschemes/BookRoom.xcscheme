@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Scheme LastUpgradeVersion="1500" version="1.7">
+   <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES">
+      <BuildActionEntries>
+         <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="NO" buildForAnalyzing="YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "A1000001"
+               BuildableName = "BookRoom.app"
+               BlueprintName = "BookRoom"
+               ReferencedContainer = "container:BookRoom.xcodeproj"
+            />
+         </BuildActionEntry>
+      </BuildActionEntries>
+   </BuildAction>
+   <TestAction buildConfiguration="Debug">
+      <Testables>
+         <TestableReference skipped="NO">
+            <BuildableReference
+               BuildableIdentifier="primary"
+               BlueprintIdentifier="BookRoomTests"
+               BuildableName="BookRoomTests.xctest"
+               BlueprintName="BookRoomTests"
+            />
+         </TestableReference>
+      </Testables>
+   </TestAction>
+   <LaunchAction buildConfiguration="Debug" allowLocationSimulation="YES">
+      <DefaultRunnableDebugRunnableGroup/>
+      <LocationScenarioReference identifier="com.apple.dt.IDERunDestination.iOS.mobile" buildableRef=""/>
+      <MacroExpansion>
+         <BuildableReference
+            BuildableIdentifier="primary"
+            BlueprintIdentifier="A1000001"
+            BuildableName="BookRoom.app"
+            BlueprintName="BookRoom"
+         />
+      </MacroExpansion>
+      <AdditionalOptions/>
+   </LaunchAction>
+</Scheme>

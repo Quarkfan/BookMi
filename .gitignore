@@ -26,3 +26,9 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots
 fastlane/test_output
+GRDB.swift
+Nuke
+ZIPFoundation
+xcuserdata/
+.build/
+Package.resolved

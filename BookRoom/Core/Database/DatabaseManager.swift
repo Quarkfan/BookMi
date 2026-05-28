@@ -30,29 +30,26 @@ final class DatabaseManager {
         try migrator.migrate(dbQueue)
     }
 
-        try migrator.migrate(dbQueue)
-    }
-
     private var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
         #if DEBUG
         migrator.eraseDatabaseOnSchemaChange = true
         #endif
 
-        migrator.registerMigration("v1_initial_schema") { db in
-            try createBooksTable(db)
-            try createShelvesTable(db)
-            try createTagsTable(db)
-            try createBookTagsTable(db)
-            try createPurchaseChannelsTable(db)
-            try createBorrowRecordsTable(db)
-            try createSearchIndexTable(db)
-            try createSettingsTable(db)
-            try createSchemaInfoTable(db)
-            try createAIOCRLogsTable(db)
-            try createOperationLogsTable(db)
-            try createFTS5Table(db)
-            try createIndexes(db)
+        migrator.registerMigration("v1_initial_schema") { [self] db in
+            try self.createBooksTable(db)
+            try self.createShelvesTable(db)
+            try self.createTagsTable(db)
+            try self.createBookTagsTable(db)
+            try self.createPurchaseChannelsTable(db)
+            try self.createBorrowRecordsTable(db)
+            try self.createSearchIndexTable(db)
+            try self.createSettingsTable(db)
+            try self.createSchemaInfoTable(db)
+            try self.createAIOCRLogsTable(db)
+            try self.createOperationLogsTable(db)
+            try self.createFTS5Table(db)
+            try self.createIndexes(db)
         }
 
         return migrator

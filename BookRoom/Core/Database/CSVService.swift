@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 
 /// CSV import/export service
 final class CSVService {
@@ -13,7 +14,6 @@ final class CSVService {
         tagRepo: TagRepository?,
         dbQueue: DatabaseQueue?
     ) async throws -> URL {
-        let encoder = CSVField.encoder
 
         // Build header
         let header = fields.map { $0.header }
@@ -329,7 +329,7 @@ enum CSVField: String, CaseIterable {
             return ""
         case .purchaseChannel:
             if let channelID = book.purchaseChannelID, let dbQueue {
-                if let channel = try? dbQueue.read({ db in try PurchaseChannel.fetchOne(db, id: channelID) }) {
+                if let channel = try? dbQueue.read({ db in try PurchaseChannel.fetchOne(db, key: channelID) }) {
                     return channel.name
                 }
             }

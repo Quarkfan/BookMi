@@ -493,79 +493,9 @@ struct FlowLayout<Data: RandomAccessCollection, Content: View>: View where Data.
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            Self.computeLayout(items: items, content: content, width: geometry.size.width)
-        }
-    }
-
-    private static func computeLayout(items: Data, content: @escaping (Data.Element) -> Content, width: CGFloat) -> some View {
-        var currentX: CGFloat = 0
-        var currentY: CGFloat = 0
-        var rowHeight: CGFloat = 0
-        var positions: [(item: Data.Element, position: CGPoint)] = []
-
-        for item in items {
-            // Estimate size
-            let estimatedWidth: CGFloat = 80
-            let estimatedHeight: CGFloat = 28
-
-            if currentX + estimatedWidth > width {
-                currentX = 0
-                currentY += rowHeight + 8
-                rowHeight = 0
-            }
-
-            positions.append((item, CGPoint(x: currentX, y: currentY)))
-            currentX += estimatedWidth + 8
-            rowHeight = max(rowHeight, estimatedHeight)
-        }
-
-        return Canvas { context, size in
-            // Simple placeholder rendering
-        } height: max(currentY + rowHeight, 40)
-        // Fallback to simple wrapping
-        .overlay {
-            WrappingView(items: items, content: content)
-        }
-    }
-}
-
-struct WrappingView<Data: RandomAccessCollection, Content: View>: View where Data.Element: Hashable {
-    let items: Data
-    let content: (Data.Element) -> Content
-
-    @State private var positions: [(Data.Element, CGPoint)] = []
-    @State private var containerHeight: CGFloat = 40
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if !positions.isEmpty {
-                ForEach(Array(positions.enumerated()), id: \.offset) { _, tuple in
-                    content(tuple.0)
-                        .position(x: tuple.1.x + 40, y: tuple.1.y + 14)
-                }
-                .frame(height: containerHeight)
-            } else {
-                // Fallback to simple HStack wrapping
-                WrappingHStack {
-                    ForEach(items, id: \.self) { item in
-                        content(item)
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Simple wrapping HStack
-struct WrappingHStack<Content: View>: View {
-    let content: () -> Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Simplified: use LazyVGrid with adaptive columns
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 80, maximum: 120))], spacing: 8) {
-                content()
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 80, maximum: 120))], spacing: 8) {
+            ForEach(items, id: \.self) { item in
+                content(item)
             }
         }
     }

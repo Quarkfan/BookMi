@@ -22,7 +22,7 @@ final class TagRepository {
 
     func fetch(byID id: String) throws -> Tag? {
         try dbQueue.read { db in
-            try Tag.fetchOne(db, id: id)
+            try Tag.fetchOne(db, key: id)
         }
     }
 

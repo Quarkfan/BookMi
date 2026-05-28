@@ -22,7 +22,7 @@ final class ShelfRepository {
 
     func fetch(byID id: String) throws -> Shelf? {
         try dbQueue.read { db in
-            try Shelf.fetchOne(db, id: id)
+            try Shelf.fetchOne(db, key: id)
         }
     }
 
@@ -89,7 +89,7 @@ final class ShelfRepository {
 
     func permanentDelete(id: String) throws {
         try dbQueue.write { db in
-            try Shelf.deleteOne(db, id: id)
+            try Shelf.deleteOne(db, key: id)
         }
     }
 

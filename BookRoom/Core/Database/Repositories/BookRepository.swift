@@ -36,7 +36,7 @@ final class BookRepository {
 
     func fetch(byID id: String) throws -> Book? {
         try dbQueue.read { db in
-            try Book.fetchOne(db, id: id)
+            try Book.fetchOne(db, key: id)
         }
     }
 
@@ -110,7 +110,7 @@ final class BookRepository {
 
     func permanentDelete(id: String) throws {
         try dbQueue.write { db in
-            try Book.deleteOne(db, id: id)
+            try Book.deleteOne(db, key: id)
         }
     }
 

@@ -370,15 +370,33 @@ struct StatisticsView: View {
             readingStats = try appContainer.bookRepo.countByReadingStatus()
                 .map { (status: $0.status, count: $0.count) }
             duplicateStats = try appContainer.bookRepo.countDuplicatesByISBN()
+            publisherStats = try appContainer.bookRepo.countByPublisher()
+                .map { (name: $0.name, count: $0.count) }
+            channelStats = try appContainer.bookRepo.countByPurchaseChannel()
+                .map { (name: $0.name, count: $0.count) }
 
-            // TODO: Author/Publisher/Channel/Tag stats need more complex queries
-            authorStats = []
-            publisherStats = []
-            channelStats = []
-            tagStats = []
-            missingISBN = 0
-            missingCover = 0
-            missingShelf = 0
+            // Author stats from all books
+            let books = try appContainer.bookRepo.fetchAll()
+            var authorCounts: [String: Int] = [:]
+            for book in books {
+                if let json = book.authorsJSON,
+                   let data = json.data(using: .utf8),
+                   let authors = try? JSONDecoder().decode([String].self, from: data) {
+                    for author in authors {
+                        authorCounts[author, default: 0] += 1
+                    }
+                }
+            }
+            authorStats = authorCounts.sorted { $0.value > $1.value }.prefix(10).map { (name: $0.key, count: $0.value) }
+
+            // Tag stats
+            let allTags = try appContainer.tagRepo.fetchAllWithCounts()
+            tagStats = allTags.map { (name: $0.tag.name, count: $0.bookCount) }
+
+            // Data quality
+            missingISBN = try appContainer.bookRepo.countMissingISBN()
+            missingCover = try appContainer.bookRepo.countMissingCovers()
+            missingShelf = try appContainer.bookRepo.countMissingShelf()
         } catch {
             print("Failed to load statistics: \(error)")
         }

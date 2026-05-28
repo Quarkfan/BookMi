@@ -7,6 +7,7 @@ struct AddBookView: View {
     @State private var showScanner = false
     @State private var showSearch = false
     @State private var showManualEntry = false
+    @State private var showCSVImport = false
     @State private var selectedSearchDraft: BookMetadataDraft?
     @State private var scannedISBN: String?
     @State private var isLoadingLookup = false
@@ -37,21 +38,19 @@ struct AddBookView: View {
                         Label("手动录入", systemImage: "square.and.pencil")
                     }
 
-                    // OCR (placeholder)
+                    // OCR
                     Button {
-                        // TODO: Open camera for OCR
+                        showOCR = true
                     } label: {
                         Label("拍照识别", systemImage: "doc.viewfinder")
                     }
-                    .opacity(0.6)
 
-                    // CSV import (placeholder)
+                    // CSV import
                     Button {
-                        // TODO: Open CSV import
+                        showCSVImport = true
                     } label: {
                         Label("CSV 导入", systemImage: "doc.badge.plus")
                     }
-                    .opacity(0.6)
                 }
 
                 // Quick settings
@@ -100,6 +99,11 @@ struct AddBookView: View {
                     showManualEntry = false
                     selectedSearchDraft = nil
                 }
+            }
+            .sheet(isPresented: $showCSVImport) {
+                CSVImportSheet(onComplete: { _ in
+                    showCSVImport = false
+                })
             }
         }
     }

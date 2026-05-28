@@ -198,6 +198,59 @@ final class BookRepository {
             """).map { ($0["isbn"] as String, $0["count"] as Int) }
         }
     }
+
+    func countByPublisher() throws -> [(name: String, count: Int)] {
+        try dbQueue.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT publisher as name, COUNT(*) as count
+                FROM books
+                WHERE deleted_at IS NULL AND publisher IS NOT NULL
+                GROUP BY publisher
+                ORDER BY count DESC
+                LIMIT 20
+            """).map { ($0["name"] as String, $0["count"] as Int) }
+        }
+    }
+
+    func countByPurchaseChannel() throws -> [(name: String?, count: Int)] {
+        try dbQueue.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT pc.name as name, COUNT(*) as count
+                FROM books b
+                LEFT JOIN purchase_channels pc ON b.purchase_channel_id = pc.id
+                WHERE b.deleted_at IS NULL
+                GROUP BY b.purchase_channel_id
+                ORDER BY count DESC
+            """).map { ($0["name"] as String?, $0["count"] as Int) }
+        }
+    }
+
+    func countMissingISBN() throws -> Int {
+        try dbQueue.read { db in
+            try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM books
+                WHERE deleted_at IS NULL AND isbn10 IS NULL AND isbn13 IS NULL
+            """) ?? 0
+        }
+    }
+
+    func countMissingCovers() throws -> Int {
+        try dbQueue.read { db in
+            try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM books
+                WHERE deleted_at IS NULL AND cover_file_name IS NULL
+            """) ?? 0
+        }
+    }
+
+    func countMissingShelf() throws -> Int {
+        try dbQueue.read { db in
+            try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM books
+                WHERE deleted_at IS NULL AND shelf_id IS NULL
+            """) ?? 0
+        }
+    }
 }
 
 // MARK: - ISBN Helper

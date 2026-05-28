@@ -216,7 +216,19 @@ struct ChannelManagementView: View {
     }
 
     private func deleteChannel(at offsets: IndexSet) {
-        // TODO: Implement channel deletion
+        for index in offsets {
+            let channel = channels[index]
+            do {
+                try appContainer.dbQueue.write { db in
+                    try db.execute(
+                        sql: "UPDATE purchase_channels SET deleted_at = ?, updated_at = ? WHERE id = ?",
+                        arguments: [ISO8601DateFormatter().string(from: Date()), ISO8601DateFormatter().string(from: Date()), channel.id])
+                }
+            } catch {
+                print("Failed to delete channel: \(error)")
+            }
+        }
+        loadChannels()
     }
 }
 

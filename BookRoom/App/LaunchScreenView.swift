@@ -1,8 +1,6 @@
 import SwiftUI
 
 struct LaunchScreenView: View {
-    let onAuthenticated: () -> Void
-
     var body: some View {
         VStack {
             Spacer()
@@ -22,19 +20,15 @@ struct LaunchScreenView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
+            ProgressView()
+                .padding(.top)
+
             Spacer()
         }
         .padding()
-        .onAppear {
-            // TODO: Check if passcode/FaceID is enabled
-            // If not, authenticate immediately
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                onAuthenticated()
-            }
-        }
     }
 }
 
 #Preview {
-    LaunchScreenView(onAuthenticated: {})
+    LaunchScreenView()
 }

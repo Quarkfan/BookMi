@@ -1,20 +1,8 @@
 import SwiftUI
 
-struct AppRootView: View {
-    @State private var isAuthenticated = false
-
-    var body: some View {
-        Group {
-            if isAuthenticated {
-                MainTabView()
-            } else {
-                LaunchScreenView(onAuthenticated: { isAuthenticated = true })
-            }
-        }
-    }
-}
-
 struct MainTabView: View {
+    @EnvironmentObject var appContainer: AppContainer
+
     var body: some View {
         TabView {
             BooksListView()
@@ -47,4 +35,5 @@ struct MainTabView: View {
 
 #Preview {
     MainTabView()
+        .environmentObject(AppContainer.shared)
 }

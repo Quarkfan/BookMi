@@ -6,8 +6,19 @@ struct BookRoomApp: App {
 
     var body: some Scene {
         WindowGroup {
-            AppRootView()
-                .environmentObject(appContainer)
+            Group {
+                if appContainer.isInitializing {
+                    LaunchScreenView()
+                } else if appContainer.isAuthenticated {
+                    MainTabView()
+                } else {
+                    PasscodeView(onAuthenticated: { appContainer.authenticate() })
+                }
+            }
+            .environmentObject(appContainer)
+            .task {
+                await appContainer.initialize()
+            }
         }
     }
 }

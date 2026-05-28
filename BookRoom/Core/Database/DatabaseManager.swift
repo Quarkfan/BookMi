@@ -13,11 +13,22 @@ final class DatabaseManager {
         let dbURL = AppPaths.databaseURL
         var config = Configuration()
         config.automaticMemoryManagement = true
-        config.prepareDatabase { db in
-            db.trace { print($0.expandedDescription) }
-        }
 
         dbQueue = try DatabaseQueue(path: dbURL.path, configuration: config)
+
+        try migrator.migrate(dbQueue)
+    }
+
+    /// Initialize with an existing database queue (for testing)
+    func initialize(with dbQueue: DatabaseQueue) throws {
+        self.dbQueue = dbQueue
+        try migrator.migrate(dbQueue)
+    }
+
+    /// Initialize test database in memory
+    func initializeTestDatabase(_ dbQueue: DatabaseQueue) throws {
+        try migrator.migrate(dbQueue)
+    }
 
         try migrator.migrate(dbQueue)
     }

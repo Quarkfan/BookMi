@@ -37,8 +37,18 @@ struct SettingsView: View {
                     }
                 }
 
+                // Borrowing
+                Section("借阅") {
+                    NavigationLink("借出管理") {
+                        BorrowedBooksView()
+                    }
+                }
+
                 // Data Management
                 Section("数据管理") {
+                    NavigationLink("导入导出") {
+                        ImportExportView()
+                    }
                     NavigationLink("标签管理") {
                         TagManagementView()
                     }
@@ -120,68 +130,6 @@ struct SettingsView: View {
                 print("Failed to rebuild pinyin index: \(error)")
             }
         }
-    }
-}
-
-// MARK: - AIOCR Settings
-
-struct AIOCRSettingsView: View {
-    @EnvironmentObject var appContainer: AppContainer
-    @State private var isEnabled = false
-    @State private var baseURL = ""
-    @State private var modelName = ""
-    @State private var isTesting = false
-    @State private var testResult: String?
-
-    var body: some View {
-        Form {
-            Section {
-                Toggle("启用 AI/OCR", isOn: $isEnabled)
-                    .onChange(of: isEnabled) { _, newValue in
-                        appContainer.settings.isAICapabilityEnabled = newValue
-                    }
-
-                TextField("API Base URL", text: $baseURL)
-                    .onChange(of: baseURL) { _, newValue in
-                        appContainer.settings.aiBaseURL = newValue.nilIfEmpty
-                    }
-
-                TextField("Model Name", text: $modelName)
-                    .onChange(of: modelName) { _, newValue in
-                        appContainer.settings.aiModelName = newValue.nilIfEmpty
-                    }
-            }
-
-            Section {
-                Button(isTesting ? "测试中..." : "测试连接") {
-                    testConnection()
-                }
-                .disabled(isEnabled && baseURL.isEmpty)
-
-                if let result = testResult {
-                    Text(result)
-                        .font(.caption)
-                        .foregroundStyle(result.hasPrefix("成功") ? .green : .red)
-                }
-            }
-        }
-        .navigationTitle("AI / OCR 设置")
-        .onAppear {
-            isEnabled = appContainer.settings.isAICapabilityEnabled
-            baseURL = appContainer.settings.aiBaseURL ?? ""
-            modelName = appContainer.settings.aiModelName ?? ""
-        }
-    }
-
-    private func testConnection() {
-        guard !baseURL.isEmpty else {
-            testResult = "请先配置 API Base URL"
-            return
-        }
-        isTesting = true
-        // TODO: Actually test the connection
-        testResult = "测试功能待实现"
-        isTesting = false
     }
 }
 
@@ -305,8 +253,20 @@ struct ChannelEditView: View {
                             createdAt: now, updatedAt: now, deletedAt: nil)
                         ch.name = name
                         ch.updatedAt = now
-                        // TODO: save to database
-                        onSave(ch)
+                        do {
+                            if channel != nil {
+                                try appContainer.dbQueue.write { db in
+                                    try ch.update(db)
+                                }
+                            } else {
+                                try appContainer.dbQueue.write { db in
+                                    try ch.insert(db)
+                                }
+                            }
+                            onSave(ch)
+                        } catch {
+                            print("Failed to save channel: \(error)")
+                        }
                     }
                     .disabled(name.isEmpty)
                 }
@@ -351,84 +311,15 @@ struct DataQualityView: View {
         }
         .navigationTitle("数据质量检查")
         .task {
-            // TODO: Calculate actual values
-        }
-    }
-}
-
-// MARK: - Backup Restore View
-
-struct BackupRestoreView: View {
-    var body: some View {
-        List {
-            Section {
-                Text("备份功能待实现")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            do {
+                let books = try appContainer.bookRepo.fetchAll()
+                missingISBN = books.filter { $0.isbn13 == nil && $0.isbn10 == nil }.count
+                missingCover = books.filter { $0.coverFileName == nil }.count
+                missingShelf = books.filter { $0.shelfID == nil }.count
+            } catch {
+                print("Failed to calculate quality metrics: \(error)")
             }
         }
-        .navigationTitle("数据备份与恢复")
-    }
-}
-
-// MARK: - Display Mode Setting
-
-struct DisplayModeSettingView: View {
-    @EnvironmentObject var appContainer: AppContainer
-    @State private var mode: DisplayMode
-
-    init() {
-        _mode = State(initialValue: AppContainer.shared.settings.displayMode)
-    }
-
-    var body: some View {
-        Picker("显示模式", selection: $mode) {
-            Text("列表模式").tag(DisplayMode.list)
-            Text("平铺模式").tag(DisplayMode.grid)
-        }
-        .pickerStyle(.inline)
-        .onChange(of: mode) { _, newValue in
-            appContainer.settings.displayMode = newValue
-        }
-    }
-}
-
-// MARK: - Sort Setting View
-
-struct SortSettingView: View {
-    @EnvironmentObject var appContainer: AppContainer
-    @State private var sortField: SortField
-    @State private var sortOrder: SortOrder
-
-    init() {
-        _sortField = State(initialValue: AppContainer.shared.settings.sortField)
-        _sortOrder = State(initialValue: AppContainer.shared.settings.sortOrder)
-    }
-
-    var body: some View {
-        Form {
-            Section("排序字段") {
-                Picker("", selection: $sortField) {
-                    Text("拼音").tag(SortField.pinyin)
-                    Text("首字母").tag(SortField.firstLetter)
-                    Text("添加时间").tag(SortField.createdAt)
-                    Text("编辑时间").tag(SortField.updatedAt)
-                }
-                .onChange(of: sortField) { _, newValue in
-                    appContainer.settings.sortField = newValue
-                }
-            }
-            Section("排序顺序") {
-                Picker("", selection: $sortOrder) {
-                    Text("升序").tag(SortOrder.ascending)
-                    Text("降序").tag(SortOrder.descending)
-                }
-                .onChange(of: sortOrder) { _, newValue in
-                    appContainer.settings.sortOrder = newValue
-                }
-            }
-        }
-        .navigationTitle("排序方式")
     }
 }
 

@@ -69,7 +69,7 @@ struct BatchActionSheet: View {
         isProcessing = true
         Task {
             do {
-                try appContainer.bookRepo.batchMarkFinished(bookIDs: selectedBookIDs)
+                try await appContainer.bookRepo.batchMarkFinished(bookIDs: selectedBookIDs)
             } catch {
                 print("Failed to batch mark finished: \(error)")
             }
@@ -84,7 +84,7 @@ struct BatchActionSheet: View {
         isProcessing = true
         Task {
             do {
-                try appContainer.bookRepo.softDelete(ids: selectedBookIDs)
+                try await appContainer.bookRepo.softDelete(ids: selectedBookIDs)
             } catch {
                 print("Failed to batch delete: \(error)")
             }
@@ -127,7 +127,7 @@ struct BatchShelfPicker: View {
             .navigationBarTitleDisplayMode(.inline)
             .task {
                 do {
-                    shelves = try appContainer.shelfRepo.fetchAll()
+                    shelves = try await appContainer.shelfRepo.fetchAll()
                 } catch {
                     print("Failed to load shelves: \(error)")
                 }
@@ -139,7 +139,7 @@ struct BatchShelfPicker: View {
         isProcessing = true
         Task {
             do {
-                try appContainer.bookRepo.batchUpdateShelf(bookIDs: bookIDs, shelfID: shelfID)
+                try await appContainer.bookRepo.batchUpdateShelf(bookIDs: bookIDs, shelfID: shelfID)
             } catch {
                 print("Failed to batch move shelf: \(error)")
             }
@@ -177,7 +177,7 @@ struct BatchTagPicker: View {
             .navigationBarTitleDisplayMode(.inline)
             .task {
                 do {
-                    tags = try appContainer.tagRepo.fetchAll()
+                    tags = try await appContainer.tagRepo.fetchAll()
                 } catch {
                     print("Failed to load tags: \(error)")
                 }
@@ -189,7 +189,7 @@ struct BatchTagPicker: View {
         isProcessing = true
         Task {
             do {
-                try appContainer.tagRepo.addTags(tagIDs: [tagID], toBooks: bookIDs)
+                try await appContainer.tagRepo.addTags(tagIDs: [tagID], toBooks: bookIDs)
             } catch {
                 print("Failed to batch add tags: \(error)")
             }
@@ -231,7 +231,7 @@ struct BatchStatusPicker: View {
         isProcessing = true
         Task {
             do {
-                try appContainer.bookRepo.batchUpdateReadingStatus(bookIDs: bookIDs, status: status)
+                try await appContainer.bookRepo.batchUpdateReadingStatus(bookIDs: bookIDs, status: status)
             } catch {
                 print("Failed to batch update status: \(error)")
             }

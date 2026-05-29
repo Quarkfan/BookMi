@@ -12,7 +12,7 @@ final class BackupService {
         guard let dbQueue else { throw BackupError.databaseNotInitialized }
 
         // 1. Checkpoint WAL
-        try dbQueue.barrierWriteWithoutTransaction { db in
+        try await dbQueue.barrierWriteWithoutTransaction { db in
             try db.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)")
             return ()
         }
@@ -97,7 +97,7 @@ final class BackupService {
         switch mode {
         case .overwrite:
             // Checkpoint current DB
-            try dbQueue.barrierWriteWithoutTransaction { db in
+            try await dbQueue.barrierWriteWithoutTransaction { db in
                 try db.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)")
                 return ()
             }
@@ -162,49 +162,49 @@ final class BackupService {
         guard let dbQueue else { return }
 
         // Export books
-        let books = try dbQueue.read { db in
+        let books = try await dbQueue.read { db in
             try Book.fetchAll(db)
         }
         let bookData = try JSONEncoder().encode(books)
         try bookData.write(to: dir.appendingPathComponent("books.json"))
 
         // Export shelves
-        let shelves = try dbQueue.read { db in
+        let shelves = try await dbQueue.read { db in
             try Shelf.fetchAll(db)
         }
         let shelfData = try JSONEncoder().encode(shelves)
         try shelfData.write(to: dir.appendingPathComponent("shelves.json"))
 
         // Export tags
-        let tags = try dbQueue.read { db in
+        let tags = try await dbQueue.read { db in
             try Tag.fetchAll(db)
         }
         let tagData = try JSONEncoder().encode(tags)
         try tagData.write(to: dir.appendingPathComponent("tags.json"))
 
         // Export book_tags
-        let bookTags = try dbQueue.read { db in
+        let bookTags = try await dbQueue.read { db in
             try BookTag.fetchAll(db)
         }
         let btData = try JSONEncoder().encode(bookTags)
         try btData.write(to: dir.appendingPathComponent("book_tags.json"))
 
         // Export borrow_records
-        let borrows = try dbQueue.read { db in
+        let borrows = try await dbQueue.read { db in
             try BorrowRecord.fetchAll(db)
         }
         let brData = try JSONEncoder().encode(borrows)
         try brData.write(to: dir.appendingPathComponent("borrow_records.json"))
 
         // Export purchase_channels
-        let channels = try dbQueue.read { db in
+        let channels = try await dbQueue.read { db in
             try PurchaseChannel.fetchAll(db)
         }
         let chData = try JSONEncoder().encode(channels)
         try chData.write(to: dir.appendingPathComponent("purchase_channels.json"))
 
         // Export settings
-        let settings = try dbQueue.read { db in
+        let settings = try await dbQueue.read { db in
             try Row.fetchAll(db, sql: "SELECT * FROM settings")
         }
         let settingsMap = Dictionary(settings.map {
@@ -228,9 +228,9 @@ final class BackupService {
         let tagCount: Int
 
         if let dbQueue {
-            bookCount = (try? dbQueue.read { db in try Book.fetchCount(db) }) ?? 0
-            shelfCount = (try? dbQueue.read { db in try Shelf.fetchCount(db) }) ?? 0
-            tagCount = (try? dbQueue.read { db in try Tag.fetchCount(db) }) ?? 0
+            bookCount = (try? await dbQueue.read { db in try Book.fetchCount(db) }) ?? 0
+            shelfCount = (try? await dbQueue.read { db in try Shelf.fetchCount(db) }) ?? 0
+            tagCount = (try? await dbQueue.read { db in try Tag.fetchCount(db) }) ?? 0
         } else {
             bookCount = 0
             shelfCount = 0
@@ -256,7 +256,7 @@ final class BackupService {
         let dbQueue = AppContainer.shared.databaseManager.dbQueue
         guard let dbQueue else { return }
 
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             // Attach backup database
             try db.execute(sql: "ATTACH DATABASE ? AS backup", arguments: [dbFile.path])
             defer { try? db.execute(sql: "DETACH DATABASE backup") }

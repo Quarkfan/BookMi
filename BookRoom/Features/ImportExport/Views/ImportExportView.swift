@@ -320,7 +320,7 @@ struct CSVExportView: View {
 
         Task {
             do {
-                let books = try appContainer.bookRepo.fetchAll()
+                let books = try await appContainer.bookRepo.fetchAll()
                 let url = try await CSVService.exportBooks(
                     books: books,
                     fields: selectedFields.sorted(by: { $0.rawValue < $1.rawValue }),

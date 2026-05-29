@@ -33,6 +33,7 @@ final class AppContainer: ObservableObject {
 
             // 2. Configure settings manager with database
             settings.configure(with: databaseManager.dbQueue)
+            await settings.load()
 
             // 3. Create repositories
             bookRepo = BookRepository(dbQueue: databaseManager.dbQueue)

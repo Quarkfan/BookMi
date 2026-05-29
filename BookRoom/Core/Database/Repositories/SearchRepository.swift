@@ -18,7 +18,7 @@ final class SearchRepository {
 
         let pinyinEntry = Pinyin.analyze(trimmed)
 
-        return try dbQueue.read { db in
+        return try await dbQueue.read { db in
             // Search via FTS5
             let ftsResults = try Row.fetchAll(db, sql: """
                 SELECT fts.book_id FROM books_fts fts
@@ -60,7 +60,7 @@ final class SearchRepository {
 
         let pinyinEntry = Pinyin.analyze(trimmed)
 
-        return try dbQueue.read { db in
+        return try await dbQueue.read { db in
             try Book.fetchAll(db, sql: """
                 SELECT DISTINCT b.* FROM books b
                 LEFT JOIN search_index si ON b.id = si.book_id
@@ -107,7 +107,7 @@ final class SearchRepository {
             purchaseChannel: nil, // TODO: join with purchase_channels
             bookID: book.id)
 
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             try db.execute(sql: """
                 INSERT INTO search_index (
                     book_id, normalized_title, normalized_authors, normalized_translators,
@@ -131,7 +131,7 @@ final class SearchRepository {
 
     /// Rebuild search index for all books
     func rebuildIndex() throws {
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             try db.execute(sql: "DELETE FROM search_index")
             try db.execute(sql: "DELETE FROM books_fts")
 
@@ -166,7 +166,7 @@ final class SearchRepository {
 
     /// Rebuild only pinyin index
     func rebuildPinyinIndex() throws {
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             let books = try Book.fetchAll(db)
             for book in books {
                 let titlePinyin = Pinyin.analyze(book.title)

@@ -173,7 +173,7 @@ struct ShelfSelectionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             do {
-                shelves = try appContainer.shelfRepo.fetchAllWithBookCounts()
+                shelves = try await appContainer.shelfRepo.fetchAllWithBookCounts()
             } catch {
                 print("Failed to fetch shelves: \(error)")
             }
@@ -211,7 +211,7 @@ struct TagSelectionView: View {
         }
         .task {
             do {
-                tags = try appContainer.tagRepo.fetchAll()
+                tags = try await appContainer.tagRepo.fetchAll()
             } catch {
                 print("Failed to fetch tags: \(error)")
             }

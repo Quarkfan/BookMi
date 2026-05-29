@@ -271,7 +271,7 @@ struct DefaultShelfSettingView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             do {
-                shelves = try appContainer.shelfRepo.fetchAll()
+                shelves = try await appContainer.shelfRepo.fetchAll()
                 selectedID = appContainer.settings.defaultShelfID
             } catch {
                 print("Failed to load shelves: \(error)")
@@ -305,7 +305,7 @@ struct DefaultTagsSettingView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             do {
-                tags = try appContainer.tagRepo.fetchAll()
+                tags = try await appContainer.tagRepo.fetchAll()
                 selectedIDs = appContainer.settings.defaultTagIDs
             } catch {
                 print("Failed to load tags: \(error)")

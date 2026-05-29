@@ -5,7 +5,7 @@ final class CSVServiceTests: DatabaseTestCase {
 
     // MARK: - Helper
 
-    private func createBook(title: String, authors: [String]? = nil, isbn13: String? = nil) throws -> Book {
+    private func createBook(title: String, authors: [String]? = nil, isbn13: String? = nil) async throws -> Book {
         let now = ISO8601DateFormatter().string(from: Date())
         var book = Book(
             id: UUID().uuidString,
@@ -57,7 +57,7 @@ final class CSVServiceTests: DatabaseTestCase {
         if let authors {
             book.authorsJSON = try? String(data: JSONEncoder().encode(authors), encoding: .utf8)
         }
-        return try bookRepo.insert(book)
+        return try await bookRepo.insert(book)
     }
 
     // MARK: - Export Tests
@@ -68,7 +68,7 @@ final class CSVServiceTests: DatabaseTestCase {
 
         let fields: [CSVField] = [.title, .authors, .isbn13]
         let url = try await CSVService.exportBooks(
-            books: try bookRepo.fetchAll(),
+            books: try await bookRepo.fetchAll(),
             fields: fields,
             shelfRepo: shelfRepo,
             tagRepo: tagRepo,
@@ -93,7 +93,7 @@ final class CSVServiceTests: DatabaseTestCase {
         try await createBook(title: "测试书")
 
         let url = try await CSVService.exportBooks(
-            books: try bookRepo.fetchAll(),
+            books: try await bookRepo.fetchAll(),
             fields: CSVField.allCases,
             shelfRepo: shelfRepo,
             tagRepo: tagRepo,
@@ -142,7 +142,7 @@ final class CSVServiceTests: DatabaseTestCase {
         XCTAssertEqual(report.totalRows, 3)
 
         // Verify books are in database
-        let books = try bookRepo.fetchAll()
+        let books = try await bookRepo.fetchAll()
         XCTAssertGreaterThanOrEqual(books.count, 3)
         XCTAssertTrue(books.contains { $0.title == "导入书一" })
         XCTAssertTrue(books.contains { $0.title == "导入书二" })
@@ -206,7 +206,7 @@ final class CSVServiceTests: DatabaseTestCase {
             updatedAt: ISO8601DateFormatter().string(from: Date()),
             deletedAt: nil
         )
-        try shelfRepo.insert(shelf)
+        try await shelfRepo.insert(shelf)
 
         // Create default tag
         let tag = Tag(
@@ -218,7 +218,7 @@ final class CSVServiceTests: DatabaseTestCase {
             updatedAt: ISO8601DateFormatter().string(from: Date()),
             deletedAt: nil
         )
-        try tagRepo.insert(tag)
+        try await tagRepo.insert(tag)
 
         let csvContent = """
         书名
@@ -244,12 +244,12 @@ final class CSVServiceTests: DatabaseTestCase {
         XCTAssertEqual(report.created, 1)
 
         // Verify shelf assignment
-        let book = try bookRepo.fetchAll().first { $0.title == "默认测试书" }
+        let book = try await bookRepo.fetchAll().first { $0.title == "默认测试书" }
         XCTAssertNotNil(book)
         XCTAssertEqual(book?.shelfID, shelf.id)
 
         // Verify tag assignment
-        let bookTags = try tagRepo.fetchTags(forBookID: book!.id)
+        let bookTags = try await tagRepo.fetchTags(forBookID: book!.id)
         XCTAssertEqual(bookTags.count, 1)
         XCTAssertEqual(bookTags.first?.name, "默认标签")
     }

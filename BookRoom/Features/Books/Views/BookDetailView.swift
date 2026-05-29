@@ -214,11 +214,11 @@ struct BookDetailView: View {
         do {
             // Load shelf
             if let shelfID = book.shelfID {
-                shelf = try appContainer.shelfRepo.fetch(byID: shelfID)
+                shelf = try await appContainer.shelfRepo.fetch(byID: shelfID)
             }
 
             // Load tags
-            tags = try appContainer.tagRepo.fetchTags(forBookID: book.id)
+            tags = try await appContainer.tagRepo.fetchTags(forBookID: book.id)
 
             // Load purchase channel
             if let channelID = book.purchaseChannelID {
@@ -243,7 +243,7 @@ struct BookDetailView: View {
 
     private func deleteBook() {
         do {
-            try appContainer.bookRepo.softDelete(id: book.id)
+            try await appContainer.bookRepo.softDelete(id: book.id)
             dismiss()
         } catch {
             print("Failed to delete book: \(error)")
@@ -324,7 +324,7 @@ struct ReadingStatusControl: View {
                         updated.finishedAt = ISO8601DateFormatter().string(from: Date())
                         updated.progressPercent = 100
                     }
-                    try? appContainer.bookRepo.update(updated)
+                    try? await appContainer.bookRepo.update(updated)
                     book = updated
                 }
             }

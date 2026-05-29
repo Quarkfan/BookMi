@@ -56,7 +56,7 @@ struct TagManagementView: View {
         defer { isLoading = false }
 
         do {
-            tags = try appContainer.tagRepo.fetchAllWithCounts()
+            tags = try await appContainer.tagRepo.fetchAllWithCounts()
         } catch {
             print("Failed to load tags: \(error)")
         }
@@ -66,7 +66,7 @@ struct TagManagementView: View {
         for index in offsets {
             let tag = tags[index].tag
             do {
-                try appContainer.tagRepo.delete(id: tag.id)
+                try await appContainer.tagRepo.delete(id: tag.id)
             } catch {
                 print("Failed to delete tag: \(error)")
             }
@@ -163,9 +163,9 @@ struct TagEditView: View {
 
         do {
             if tag != nil {
-                tagItem = try appContainer.tagRepo.update(tagItem)
+                tagItem = try await appContainer.tagRepo.update(tagItem)
             } else {
-                tagItem = try appContainer.tagRepo.insert(tagItem)
+                tagItem = try await appContainer.tagRepo.insert(tagItem)
             }
             onSave(tagItem)
         } catch {

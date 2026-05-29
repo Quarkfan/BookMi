@@ -30,34 +30,41 @@ enum SettingsKey: String {
     case securityBiometricEnabled = "security.biometric_enabled"
 
     case searchIndexVersion = "search.index_version"
-
-    // Legacy keys for backward compatibility
-    case defaultShelfID = "default_shelf_id"
-    case defaultTagIDs = "default_tag_ids"
-    case defaultPurchaseChannel = "default_purchase_channel"
-    case displayMode = "display_mode"
-    case sortField = "sort_field"
-    case sortOrder = "sort_order"
-    case passcodeEnabled = "passcode_enabled"
-    case passwordHash = "password_hash"
-    case icloudSyncEnabled = "icloud_sync_enabled"
-    case pinyinIndexVersion = "pinyin_index_version"
 }
 
 /// Settings manager backed by SQLite settings table
-final class SettingsManager {
+final class SettingsManager: ObservableObject {
     static let shared = SettingsManager()
 
     private(set) var dbQueue: DatabaseQueue!
+
+    // MARK: - In-memory cache (backed by private vars, persisted on change)
+
+    // (displayMode, sortField, etc. are computed properties below)
 
     func configure(with dbQueue: DatabaseQueue) {
         self.dbQueue = dbQueue
     }
 
-    // MARK: - Get/Set
+    /// Load all settings from database into memory cache
+    func load() async {
+        _displayMode = (await string(forKey: .uiDisplayMode)).flatMap { DisplayMode(rawValue: $0) } ?? .list
+        _sortField = (await string(forKey: .uiSortField)).flatMap { SortField(rawValue: $0) } ?? .pinyin
+        _sortOrder = (await string(forKey: .uiSortOrder)).flatMap { SortOrder(rawValue: $0) } ?? .ascending
+        _defaultShelfID = await string(forKey: .scanDefaultShelfID)
+        _defaultTagIDs = await array(forKey: .scanDefaultTagIDs)
+        _defaultPurchaseChannelID = await string(forKey: .scanDefaultPurchaseChannelID)
+        _isPasscodeEnabled = await bool(forKey: .securityPasscodeEnabled)
+        _isBiometricEnabled = await bool(forKey: .securityBiometricEnabled)
+        _isAICapabilityEnabled = await bool(forKey: .aiEnabled)
+        _aiBaseURL = await string(forKey: .aiBaseURL)
+        _aiModelName = await string(forKey: .aiModelName)
+    }
 
-    func string(forKey key: SettingsKey) -> String? {
-        try? dbQueue.read { db in
+    // MARK: - Async DB Access
+
+    func string(forKey key: SettingsKey) async -> String? {
+        try? await dbQueue.read { db in
             try String.fetchOne(db,
                 sql: "SELECT value FROM settings WHERE key = ?",
                 arguments: [key.rawValue])
@@ -65,50 +72,44 @@ final class SettingsManager {
     }
 
     func set(_ value: String?, forKey key: SettingsKey) {
-        _ = try? dbQueue.write { db in
-            if value != nil {
-                try db.execute(
-                    sql: """
-                    INSERT INTO settings (key, value, updated_at)
-                    VALUES (?, ?, ?)
-                    ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = ?
-                    """,
-                    arguments: [key.rawValue, value, ISO8601(), value, ISO8601()])
-            } else {
-                try db.execute(
-                    sql: "DELETE FROM settings WHERE key = ?",
-                    arguments: [key.rawValue])
+        Task {
+            _ = try? await dbQueue.write { db in
+                if value != nil {
+                    try db.execute(
+                        sql: """
+                        INSERT INTO settings (key, value, updated_at)
+                        VALUES (?, ?, ?)
+                        ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = ?
+                        """,
+                        arguments: [key.rawValue, value, ISO8601(), value, ISO8601()])
+                } else {
+                    try db.execute(
+                        sql: "DELETE FROM settings WHERE key = ?",
+                        arguments: [key.rawValue])
+                }
+                return true
             }
-            return true
         }
     }
 
-    func bool(forKey key: SettingsKey) -> Bool {
-        string(forKey: key).map { Bool($0) ?? false } ?? false
+    func bool(forKey key: SettingsKey) async -> Bool {
+        (await string(forKey: key)).map { Bool($0) ?? false } ?? false
     }
 
     func set(_ value: Bool, forKey key: SettingsKey) {
         set(value ? "true" : "false", forKey: key)
     }
 
-    func int(forKey key: SettingsKey) -> Int? {
-        string(forKey: key).flatMap { Int($0) }
+    func int(forKey key: SettingsKey) async -> Int? {
+        await string(forKey: key).flatMap { Int($0) }
     }
 
     func set(_ value: Int?, forKey key: SettingsKey) {
         set(value.map { String($0) }, forKey: key)
     }
 
-    func double(forKey key: SettingsKey) -> Double? {
-        string(forKey: key).flatMap { Double($0) }
-    }
-
-    func set(_ value: Double?, forKey key: SettingsKey) {
-        set(value.map { String($0) }, forKey: key)
-    }
-
-    func array(forKey key: SettingsKey) -> [String] {
-        guard let json = string(forKey: key),
+    func array(forKey key: SettingsKey) async -> [String] {
+        guard let json = await string(forKey: key),
               let data = json.data(using: .utf8),
               let arr = try? JSONDecoder().decode([String].self, from: data) else {
             return []
@@ -122,73 +123,106 @@ final class SettingsManager {
         set(json, forKey: key)
     }
 
-    // MARK: - Convenience Accessors
+    // MARK: - Convenience Accessors (sync read, async persist)
 
     var displayMode: DisplayMode {
-        get {
-            string(forKey: .uiDisplayMode).flatMap { DisplayMode(rawValue: $0) } ?? .list
+        get { _displayMode }
+        set {
+            _displayMode = newValue
+            set(newValue.rawValue, forKey: .uiDisplayMode)
         }
-        set { set(newValue.rawValue, forKey: .uiDisplayMode) }
     }
+    @Published private var _displayMode: DisplayMode = .list
 
     var sortField: SortField {
-        get {
-            string(forKey: .uiSortField).flatMap { SortField(rawValue: $0) } ?? .pinyin
+        get { _sortField }
+        set {
+            _sortField = newValue
+            set(newValue.rawValue, forKey: .uiSortField)
         }
-        set { set(newValue.rawValue, forKey: .uiSortField) }
     }
+     @Published private var _sortField: SortField = .pinyin
 
     var sortOrder: SortOrder {
-        get {
-            string(forKey: .uiSortOrder).flatMap { SortOrder(rawValue: $0) } ?? .ascending
+        get { _sortOrder }
+        set {
+            _sortOrder = newValue
+            set(newValue.rawValue, forKey: .uiSortOrder)
         }
-        set { set(newValue.rawValue, forKey: .uiSortOrder) }
     }
+     @Published private var _sortOrder: SortOrder = .ascending
 
     var defaultShelfID: String? {
-        get { string(forKey: .scanDefaultShelfID) }
-        set { set(newValue, forKey: .scanDefaultShelfID) }
+        get { _defaultShelfID }
+        set {
+            _defaultShelfID = newValue
+            set(newValue, forKey: .scanDefaultShelfID)
+        }
     }
+     @Published private var _defaultShelfID: String?
 
     var defaultTagIDs: [String] {
-        get { array(forKey: .scanDefaultTagIDs) }
-        set { set(newValue, forKey: .scanDefaultTagIDs) }
+        get { _defaultTagIDs }
+        set {
+            _defaultTagIDs = newValue
+            set(newValue, forKey: .scanDefaultTagIDs)
+        }
     }
+     @Published private var _defaultTagIDs: [String] = []
 
     var defaultPurchaseChannelID: String? {
-        get { string(forKey: .scanDefaultPurchaseChannelID) }
-        set { set(newValue, forKey: .scanDefaultPurchaseChannelID) }
+        get { _defaultPurchaseChannelID }
+        set {
+            _defaultPurchaseChannelID = newValue
+            set(newValue, forKey: .scanDefaultPurchaseChannelID)
+        }
     }
+     @Published private var _defaultPurchaseChannelID: String?
 
     var isPasscodeEnabled: Bool {
-        get { bool(forKey: .securityPasscodeEnabled) }
-        set { set(newValue, forKey: .securityPasscodeEnabled) }
+        get { _isPasscodeEnabled }
+        set {
+            _isPasscodeEnabled = newValue
+            set(newValue, forKey: .securityPasscodeEnabled)
+        }
     }
+     @Published private var _isPasscodeEnabled: Bool = false
 
     var isBiometricEnabled: Bool {
-        get { bool(forKey: .securityBiometricEnabled) }
-        set { set(newValue, forKey: .securityBiometricEnabled) }
+        get { _isBiometricEnabled }
+        set {
+            _isBiometricEnabled = newValue
+            set(newValue, forKey: .securityBiometricEnabled)
+        }
     }
+     @Published private var _isBiometricEnabled: Bool = false
 
     var isAICapabilityEnabled: Bool {
-        get { bool(forKey: .aiEnabled) }
-        set { set(newValue, forKey: .aiEnabled) }
+        get { _isAICapabilityEnabled }
+        set {
+            _isAICapabilityEnabled = newValue
+            set(newValue, forKey: .aiEnabled)
+        }
     }
+     @Published private var _isAICapabilityEnabled: Bool = false
 
     var aiBaseURL: String? {
-        get { string(forKey: .aiBaseURL) }
-        set { set(newValue, forKey: .aiBaseURL) }
+        get { _aiBaseURL }
+        set {
+            _aiBaseURL = newValue
+            set(newValue, forKey: .aiBaseURL)
+        }
     }
+     @Published private var _aiBaseURL: String?
 
     var aiModelName: String? {
-        get { string(forKey: .aiModelName) }
-        set { set(newValue, forKey: .aiModelName) }
+        get { _aiModelName }
+        set {
+            _aiModelName = newValue
+            set(newValue, forKey: .aiModelName)
+        }
     }
-
-    var searchIndexVersion: Int? {
-        get { int(forKey: .searchIndexVersion) }
-        set { set(newValue, forKey: .searchIndexVersion) }
-    }
+     @Published private var _aiModelName: String?
 }
 
 // MARK: - Supporting Types

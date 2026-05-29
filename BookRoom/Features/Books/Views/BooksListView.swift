@@ -236,7 +236,7 @@ struct BooksListView: View {
         defer { isLoading = false }
 
         do {
-            var query = try appContainer.bookRepo.fetchAll()
+            var query = try await appContainer.bookRepo.fetchAll()
             books = sortBooks(query)
         } catch {
             print("Failed to load books: \(error)")
@@ -251,7 +251,7 @@ struct BooksListView: View {
 
         Task {
             do {
-                let results = try appContainer.searchRepo.searchWithLike(keyword: searchText)
+                let results = try await appContainer.searchRepo.searchWithLike(keyword: searchText)
                 books = sortBooks(results)
             } catch {
                 print("Search failed: \(error)")
@@ -496,8 +496,8 @@ struct FilterSheetView: View {
             }
             .task {
                 do {
-                    shelves = try appContainer.shelfRepo.fetchAll()
-                    tags = try appContainer.tagRepo.fetchAll()
+                    shelves = try await appContainer.shelfRepo.fetchAll()
+                    tags = try await appContainer.tagRepo.fetchAll()
                 } catch {
                     print("Failed to load shelves/tags: \(error)")
                 }

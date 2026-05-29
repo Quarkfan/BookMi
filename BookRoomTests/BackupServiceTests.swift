@@ -15,10 +15,10 @@ final class BackupServiceTests: DatabaseTestCase {
             updatedAt: ISO8601DateFormatter().string(from: Date()),
             deletedAt: nil
         )
-        try shelfRepo.insert(shelf)
+        try await shelfRepo.insert(shelf)
 
         let book = createBook(title: "备份测试书")
-        try bookRepo.insert(book)
+        try await bookRepo.insert(book)
 
         // Create backup
         let zipURL = try await BackupService.createBackup()
@@ -65,10 +65,10 @@ final class BackupServiceTests: DatabaseTestCase {
             updatedAt: ISO8601DateFormatter().string(from: Date()),
             deletedAt: nil
         )
-        try shelfRepo.insert(shelf)
+        try await shelfRepo.insert(shelf)
 
         for i in 0..<5 {
-            try bookRepo.insert(createBook(title: "Book \(i)"))
+            try await bookRepo.insert(createBook(title: "Book \(i)"))
         }
 
         let tag = Tag(
@@ -80,7 +80,7 @@ final class BackupServiceTests: DatabaseTestCase {
             updatedAt: ISO8601DateFormatter().string(from: Date()),
             deletedAt: nil
         )
-        try tagRepo.insert(tag)
+        try await tagRepo.insert(tag)
 
         let zipURL = try await BackupService.createBackup()
 

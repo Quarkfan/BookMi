@@ -12,7 +12,7 @@ final class TagRepository {
     // MARK: - Fetch
 
     func fetchAll() throws -> [Tag] {
-        try dbQueue.read { db in
+        try await dbQueue.read { db in
             try Tag
                 .filter(Column("deleted_at") == nil)
                 .order(Column("sort_order").asc, Column("name").asc)
@@ -21,13 +21,13 @@ final class TagRepository {
     }
 
     func fetch(byID id: String) throws -> Tag? {
-        try dbQueue.read { db in
+        try await dbQueue.read { db in
             try Tag.fetchOne(db, key: id)
         }
     }
 
     func fetch(byName name: String) throws -> Tag? {
-        try dbQueue.read { db in
+        try await dbQueue.read { db in
             try Tag
                 .filter(Column("deleted_at") == nil)
                 .filter(Column("name") == name)
@@ -36,7 +36,7 @@ final class TagRepository {
     }
 
     func fetchTags(forBookID bookID: String) throws -> [Tag] {
-        try dbQueue.read { db in
+        try await dbQueue.read { db in
             try Tag
                 .filter(Column("deleted_at") == nil)
                 .joining(required: BookTag.filter(Column("book_id") == bookID).annotated(with: [Column("tag_id")]))
@@ -46,7 +46,7 @@ final class TagRepository {
     }
 
     func fetchAllWithCounts() throws -> [(tag: Tag, bookCount: Int)] {
-        try dbQueue.read { db in
+        try await dbQueue.read { db in
             let tags = try Tag
                 .filter(Column("deleted_at") == nil)
                 .order(Column("name").asc)
@@ -65,7 +65,7 @@ final class TagRepository {
 
     @discardableResult
     func insert(_ tag: Tag) throws -> Tag {
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             var tag = tag
             try tag.insert(db)
             return tag
@@ -74,7 +74,7 @@ final class TagRepository {
 
     @discardableResult
     func update(_ tag: Tag) throws -> Tag {
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             var tag = tag
             tag.updatedAt = ISO8601()
             try tag.update(db)
@@ -101,7 +101,7 @@ final class TagRepository {
     // MARK: - Delete
 
     func delete(id: String) throws {
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             try db.execute(
                 sql: "DELETE FROM book_tags WHERE tag_id = ?",
                 arguments: [id])
@@ -114,7 +114,7 @@ final class TagRepository {
     // MARK: - Book-Tag Association
 
     func addTag(tagID: String, toBook bookID: String) throws {
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             let relation = BookTag(
                 bookID: bookID,
                 tagID: tagID,
@@ -124,7 +124,7 @@ final class TagRepository {
     }
 
     func removeTag(tagID: String, fromBook bookID: String) throws {
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             try db.execute(
                 sql: "DELETE FROM book_tags WHERE book_id = ? AND tag_id = ?",
                 arguments: [bookID, tagID])
@@ -132,7 +132,7 @@ final class TagRepository {
     }
 
     func setTags(tagIDs: [String], forBook bookID: String) throws {
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             try db.execute(
                 sql: "DELETE FROM book_tags WHERE book_id = ?",
                 arguments: [bookID])
@@ -147,7 +147,7 @@ final class TagRepository {
     }
 
     func addTags(tagIDs: [String], toBooks bookIDs: [String]) throws {
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             let now = ISO8601()
             for bookID in bookIDs {
                 for tagID in tagIDs {
@@ -162,7 +162,7 @@ final class TagRepository {
     }
 
     func removeTags(tagIDs: [String], fromBooks bookIDs: [String]) throws {
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             let placeholders = bookIDs.map { _ in "?" }.joined(separator: ",")
             try db.execute(
                 sql: "DELETE FROM book_tags WHERE book_id IN (\(placeholders)) AND tag_id IN (\(tagIDs.map { _ in "?" }.joined(separator: ",")))",

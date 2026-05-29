@@ -111,17 +111,17 @@ struct AIOCRSettingsView: View {
             }
         }
         .navigationTitle("AI / OCR 设置")
-        .onAppear {
-            loadSettings()
+        .task {
+            await loadSettings()
         }
     }
 
-    private func loadSettings() {
+    private func loadSettings() async {
         isEnabled = appContainer.settings.isAICapabilityEnabled
         baseURL = appContainer.settings.aiBaseURL ?? ""
         modelName = appContainer.settings.aiModelName ?? ""
-        timeout = appContainer.settings.int(forKey: .aiTimeout).map { String($0) } ?? "60"
-        maxTokens = appContainer.settings.int(forKey: .aiMaxTokens).map { String($0) } ?? "2000"
+        timeout = (await appContainer.settings.int(forKey: .aiTimeout)).map { String($0) } ?? "60"
+        maxTokens = (await appContainer.settings.int(forKey: .aiMaxTokens)).map { String($0) } ?? "2000"
 
         if let key = appContainer.keychain.getLLMAPIKey() {
             apiKey = key

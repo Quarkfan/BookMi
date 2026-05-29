@@ -104,7 +104,7 @@ struct SettingsView: View {
             .navigationTitle("设置")
             .task {
                 do {
-                    bookCount = try appContainer.bookRepo.fetchCount()
+                    bookCount = try await appContainer.bookRepo.fetchCount()
                 } catch {
                     print("Failed to fetch book count: \(error)")
                 }
@@ -115,7 +115,7 @@ struct SettingsView: View {
     private func rebuildIndex() {
         Task {
             do {
-                try appContainer.searchRepo.rebuildIndex()
+                try await appContainer.searchRepo.rebuildIndex()
             } catch {
                 print("Failed to rebuild index: \(error)")
             }
@@ -125,7 +125,7 @@ struct SettingsView: View {
     private func rebuildPinyinIndex() {
         Task {
             do {
-                try appContainer.searchRepo.rebuildPinyinIndex()
+                try await appContainer.searchRepo.rebuildPinyinIndex()
             } catch {
                 print("Failed to rebuild pinyin index: \(error)")
             }
@@ -324,7 +324,7 @@ struct DataQualityView: View {
         .navigationTitle("数据质量检查")
         .task {
             do {
-                let books = try appContainer.bookRepo.fetchAll()
+                let books = try await appContainer.bookRepo.fetchAll()
                 missingISBN = books.filter { $0.isbn13 == nil && $0.isbn10 == nil }.count
                 missingCover = books.filter { $0.coverFileName == nil }.count
                 missingShelf = books.filter { $0.shelfID == nil }.count

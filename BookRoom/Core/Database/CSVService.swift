@@ -102,16 +102,16 @@ final class CSVService {
             case .overwrite(let book):
                 var updated = book
                 applyDraftToBook(&updated, draft: draft, shelfID: defaultShelfID, tagIDs: defaultTagIDs, channelID: defaultPurchaseChannelID)
-                try bookRepo.update(updated)
-                try searchRepo.updateIndex(for: updated)
+                try await bookRepo.update(updated)
+                try await searchRepo.updateIndex(for: updated)
                 report.updated += 1
             case .createNew:
                 var book = Book(from: draft, shelfID: defaultShelfID, purchaseChannelID: defaultPurchaseChannelID)
-                book = try bookRepo.insert(book)
+                book = try await bookRepo.insert(book)
 
                 // Add default tags
                 if !defaultTagIDs.isEmpty {
-                    try tagRepo.addTags(tagIDs: defaultTagIDs, toBooks: [book.id])
+                    try await tagRepo.addTags(tagIDs: defaultTagIDs, toBooks: [book.id])
                 }
 
                 // Download cover
@@ -119,10 +119,10 @@ final class CSVService {
                     let fileName = await draft.downloadCover(forBookID: book.id)
                     var updated = book
                     updated.coverFileName = fileName
-                    try bookRepo.update(updated)
+                    try await bookRepo.update(updated)
                 }
 
-                try searchRepo.updateIndex(for: book)
+                try await searchRepo.updateIndex(for: book)
                 report.created += 1
             }
         }
@@ -144,7 +144,7 @@ final class CSVService {
                let authors = draft.authors,
                !title.isEmpty, !authors.isEmpty {
                 // Simplified: search by title
-                let existing = try bookRepo.fetchAll().first { book in
+                let existing = try await bookRepo.fetchAll().first { book in
                     book.title == title
                 }
                 if let existing {
@@ -160,7 +160,7 @@ final class CSVService {
         }
 
         // Check by ISBN
-        let existing = try bookRepo.fetch(byISBN: isbn).first
+        let existing = try await bookRepo.fetch(byISBN: isbn).first
         guard let existing else { return .createNew }
 
         switch strategy {
@@ -315,7 +315,7 @@ enum CSVField: String, CaseIterable {
         case .summary: return book.summary ?? ""
         case .shelf:
             if let shelfID = book.shelfID, let shelfRepo {
-                if let shelf = try? shelfRepo.fetch(byID: shelfID) {
+                if let shelf = try? await shelfRepo.fetch(byID: shelfID) {
                     return shelf.name
                 }
             }
@@ -323,13 +323,13 @@ enum CSVField: String, CaseIterable {
         case .locationDetail: return book.locationDetail ?? ""
         case .tags:
             if let tagRepo {
-                let tags = try? tagRepo.fetchTags(forBookID: book.id)
+                let tags = try? await tagRepo.fetchTags(forBookID: book.id)
                 return (tags ?? []).map { $0.name }.joined(separator: ", ")
             }
             return ""
         case .purchaseChannel:
             if let channelID = book.purchaseChannelID, let dbQueue {
-                if let channel = try? dbQueue.read({ db in try PurchaseChannel.fetchOne(db, key: channelID) }) {
+                if let channel = try? await dbQueue.read({ db in try PurchaseChannel.fetchOne(db, key: channelID) }) {
                     return channel.name
                 }
             }

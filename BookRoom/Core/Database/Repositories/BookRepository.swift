@@ -11,8 +11,8 @@ final class BookRepository {
 
     // MARK: - Fetch
 
-    func fetchAll(excludeDeleted: Bool = true, limit: Int? = nil, offset: Int = 0) throws -> [Book] {
-        try dbQueue.read { db in
+    func fetchAll(excludeDeleted: Bool = true, limit: Int? = nil, offset: Int = 0) async throws -> [Book] {
+        try await dbQueue.read { db in
             var query = Book.all()
             if excludeDeleted {
                 query = query.filter(Column("deleted_at") == nil)
@@ -24,8 +24,8 @@ final class BookRepository {
         }
     }
 
-    func fetchCount(excludeDeleted: Bool = true) throws -> Int {
-        try dbQueue.read { db in
+    func fetchCount(excludeDeleted: Bool = true) async throws -> Int {
+        try await dbQueue.read { db in
             var query = Book.all()
             if excludeDeleted {
                 query = query.filter(Column("deleted_at") == nil)
@@ -34,14 +34,14 @@ final class BookRepository {
         }
     }
 
-    func fetch(byID id: String) throws -> Book? {
-        try dbQueue.read { db in
+    func fetch(byID id: String) async throws -> Book? {
+        try await dbQueue.read { db in
             try Book.fetchOne(db, key: id)
         }
     }
 
-    func fetch(byISBN isbn: String) throws -> [Book] {
-        try dbQueue.read { db in
+    func fetch(byISBN isbn: String) async throws -> [Book] {
+        try await dbQueue.read { db in
             try Book
                 .filter(Column("deleted_at") == nil)
                 .filter(Column("isbn10") == isbn || Column("isbn13") == isbn)
@@ -49,8 +49,8 @@ final class BookRepository {
         }
     }
 
-    func fetch(byShelfID shelfID: String) throws -> [Book] {
-        try dbQueue.read { db in
+    func fetch(byShelfID shelfID: String) async throws -> [Book] {
+        try await dbQueue.read { db in
             try Book
                 .filter(Column("deleted_at") == nil)
                 .filter(Column("shelf_id") == shelfID)
@@ -59,8 +59,8 @@ final class BookRepository {
         }
     }
 
-    func fetch(byTagID tagID: String) throws -> [Book] {
-        try dbQueue.read { db in
+    func fetch(byTagID tagID: String) async throws -> [Book] {
+        try await dbQueue.read { db in
             try Book
                 .filter(Column("deleted_at") == nil)
                 .joining(optional: BookTag.filter(Column("tag_id") == tagID))
@@ -72,8 +72,8 @@ final class BookRepository {
     // MARK: - Create/Update
 
     @discardableResult
-    func insert(_ book: Book) throws -> Book {
-        try dbQueue.write { db in
+    func insert(_ book: Book) async throws -> Book {
+        try await dbQueue.write { db in
             var book = book
             try book.insert(db)
             return book
@@ -81,8 +81,8 @@ final class BookRepository {
     }
 
     @discardableResult
-    func update(_ book: Book) throws -> Book {
-        try dbQueue.write { db in
+    func update(_ book: Book) async throws -> Book {
+        try await dbQueue.write { db in
             var book = book
             book.updatedAt = ISO8601()
             try book.update(db)
@@ -93,7 +93,7 @@ final class BookRepository {
     // MARK: - Delete (soft)
 
     func softDelete(id: String) throws {
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             try db.execute(
                 sql: "UPDATE books SET deleted_at = ?, updated_at = ? WHERE id = ?",
                 arguments: [ISO8601(), ISO8601(), id])
@@ -101,7 +101,7 @@ final class BookRepository {
     }
 
     func softDelete(ids: [String]) throws {
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             try db.execute(
                 sql: "UPDATE books SET deleted_at = ?, updated_at = ? WHERE id IN (?)",
                 arguments: [ISO8601(), ISO8601(), ids.joined(separator: ",")])
@@ -109,7 +109,7 @@ final class BookRepository {
     }
 
     func permanentDelete(id: String) throws {
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             try Book.deleteOne(db, key: id)
         }
     }
@@ -117,7 +117,7 @@ final class BookRepository {
     // MARK: - Batch Operations
 
     func batchUpdateShelf(bookIDs: [String], shelfID: String?) throws {
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             let shelfValue: DatabaseValue = shelfID.map { .string($0) } ?? .null
             try db.execute(
                 sql: """
@@ -128,7 +128,7 @@ final class BookRepository {
     }
 
     func batchUpdateReadingStatus(bookIDs: [String], status: ReadingStatus) throws {
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             try db.execute(
                 sql: """
                 UPDATE books SET reading_status = ?, updated_at = ? WHERE id IN (\(bookIDs.map { _ in "?" }.joined(separator: ",")))
@@ -138,7 +138,7 @@ final class BookRepository {
     }
 
     func batchMarkFinished(bookIDs: [String]) throws {
-        try dbQueue.write { db in
+        try await dbQueue.write { db in
             try db.execute(
                 sql: """
                 UPDATE books SET reading_status = 'finished', progress_percent = 100, finished_at = ?, updated_at = ?
@@ -150,8 +150,8 @@ final class BookRepository {
 
     // MARK: - Statistics
 
-    func countByYear() throws -> [(year: String, count: Int)] {
-        try dbQueue.read { db in
+    func countByYear() async throws -> [(year: String, count: Int)] {
+        try await dbQueue.read { db in
             try Row.fetchAll(db, sql: """
                 SELECT strftime('%Y', created_at) as year, COUNT(*) as count
                 FROM books
@@ -162,8 +162,8 @@ final class BookRepository {
         }
     }
 
-    func countByShelf() throws -> [(shelfID: String?, shelfName: String?, count: Int)] {
-        try dbQueue.read { db in
+    func countByShelf() async throws -> [(shelfID: String?, shelfName: String?, count: Int)] {
+        try await dbQueue.read { db in
             try Row.fetchAll(db, sql: """
                 SELECT b.shelf_id, s.name as shelf_name, COUNT(*) as count
                 FROM books b
@@ -175,8 +175,8 @@ final class BookRepository {
         }
     }
 
-    func countByReadingStatus() throws -> [(status: String, count: Int)] {
-        try dbQueue.read { db in
+    func countByReadingStatus() async throws -> [(status: String, count: Int)] {
+        try await dbQueue.read { db in
             try Row.fetchAll(db, sql: """
                 SELECT reading_status as status, COUNT(*) as count
                 FROM books
@@ -186,8 +186,8 @@ final class BookRepository {
         }
     }
 
-    func countDuplicatesByISBN() throws -> [(isbn: String, count: Int)] {
-        try dbQueue.read { db in
+    func countDuplicatesByISBN() async throws -> [(isbn: String, count: Int)] {
+        try await dbQueue.read { db in
             try Row.fetchAll(db, sql: """
                 SELECT COALESCE(isbn13, isbn10) as isbn, COUNT(*) as count
                 FROM books
@@ -199,8 +199,8 @@ final class BookRepository {
         }
     }
 
-    func countByPublisher() throws -> [(name: String, count: Int)] {
-        try dbQueue.read { db in
+    func countByPublisher() async throws -> [(name: String, count: Int)] {
+        try await dbQueue.read { db in
             try Row.fetchAll(db, sql: """
                 SELECT publisher as name, COUNT(*) as count
                 FROM books
@@ -212,8 +212,8 @@ final class BookRepository {
         }
     }
 
-    func countByPurchaseChannel() throws -> [(name: String?, count: Int)] {
-        try dbQueue.read { db in
+    func countByPurchaseChannel() async throws -> [(name: String?, count: Int)] {
+        try await dbQueue.read { db in
             try Row.fetchAll(db, sql: """
                 SELECT pc.name as name, COUNT(*) as count
                 FROM books b
@@ -225,8 +225,8 @@ final class BookRepository {
         }
     }
 
-    func countMissingISBN() throws -> Int {
-        try dbQueue.read { db in
+    func countMissingISBN() async throws -> Int {
+        try await dbQueue.read { db in
             try Int.fetchOne(db, sql: """
                 SELECT COUNT(*) FROM books
                 WHERE deleted_at IS NULL AND isbn10 IS NULL AND isbn13 IS NULL
@@ -234,8 +234,8 @@ final class BookRepository {
         }
     }
 
-    func countMissingCovers() throws -> Int {
-        try dbQueue.read { db in
+    func countMissingCovers() async throws -> Int {
+        try await dbQueue.read { db in
             try Int.fetchOne(db, sql: """
                 SELECT COUNT(*) FROM books
                 WHERE deleted_at IS NULL AND cover_file_name IS NULL
@@ -243,8 +243,8 @@ final class BookRepository {
         }
     }
 
-    func countMissingShelf() throws -> Int {
-        try dbQueue.read { db in
+    func countMissingShelf() async throws -> Int {
+        try await dbQueue.read { db in
             try Int.fetchOne(db, sql: """
                 SELECT COUNT(*) FROM books
                 WHERE deleted_at IS NULL AND shelf_id IS NULL

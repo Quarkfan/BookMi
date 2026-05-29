@@ -239,7 +239,7 @@ struct BorrowedBooksView: View {
         defer { isLoading = false }
 
         do {
-            borrowedBooks = try appContainer.bookRepo.fetchAll().filter {
+            borrowedBooks = try await appContainer.bookRepo.fetchAll().filter {
                 $0.borrowStatus == .borrowed
             }
         } catch {

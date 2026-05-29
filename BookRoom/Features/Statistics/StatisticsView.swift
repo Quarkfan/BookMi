@@ -363,20 +363,20 @@ struct StatisticsView: View {
         defer { isLoading = false }
 
         do {
-            totalBooks = try appContainer.bookRepo.fetchCount()
-            yearlyStats = try appContainer.bookRepo.countByYear()
-            shelfStats = try appContainer.bookRepo.countByShelf()
+            totalBooks = try await appContainer.bookRepo.fetchCount()
+            yearlyStats = try await appContainer.bookRepo.countByYear()
+            shelfStats = try await appContainer.bookRepo.countByShelf()
                 .map { (shelfName: $0.shelfName, count: $0.count) }
-            readingStats = try appContainer.bookRepo.countByReadingStatus()
+            readingStats = try await appContainer.bookRepo.countByReadingStatus()
                 .map { (status: $0.status, count: $0.count) }
-            duplicateStats = try appContainer.bookRepo.countDuplicatesByISBN()
-            publisherStats = try appContainer.bookRepo.countByPublisher()
+            duplicateStats = try await appContainer.bookRepo.countDuplicatesByISBN()
+            publisherStats = try await appContainer.bookRepo.countByPublisher()
                 .map { (name: $0.name, count: $0.count) }
-            channelStats = try appContainer.bookRepo.countByPurchaseChannel()
+            channelStats = try await appContainer.bookRepo.countByPurchaseChannel()
                 .map { (name: $0.name, count: $0.count) }
 
             // Author stats from all books
-            let books = try appContainer.bookRepo.fetchAll()
+            let books = try await appContainer.bookRepo.fetchAll()
             var authorCounts: [String: Int] = [:]
             for book in books {
                 if let json = book.authorsJSON,
@@ -390,13 +390,13 @@ struct StatisticsView: View {
             authorStats = authorCounts.sorted { $0.value > $1.value }.prefix(10).map { (name: $0.key, count: $0.value) }
 
             // Tag stats
-            let allTags = try appContainer.tagRepo.fetchAllWithCounts()
+            let allTags = try await appContainer.tagRepo.fetchAllWithCounts()
             tagStats = allTags.map { (name: $0.tag.name, count: $0.bookCount) }
 
             // Data quality
-            missingISBN = try appContainer.bookRepo.countMissingISBN()
-            missingCover = try appContainer.bookRepo.countMissingCovers()
-            missingShelf = try appContainer.bookRepo.countMissingShelf()
+            missingISBN = try await appContainer.bookRepo.countMissingISBN()
+            missingCover = try await appContainer.bookRepo.countMissingCovers()
+            missingShelf = try await appContainer.bookRepo.countMissingShelf()
         } catch {
             print("Failed to load statistics: \(error)")
         }

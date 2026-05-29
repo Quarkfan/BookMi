@@ -67,7 +67,7 @@ struct ShelvesListView: View {
         defer { isLoading = false }
 
         do {
-            shelves = try appContainer.shelfRepo.fetchAllWithBookCounts()
+            shelves = try await appContainer.shelfRepo.fetchAllWithBookCounts()
         } catch {
             print("Failed to load shelves: \(error)")
         }
@@ -77,7 +77,7 @@ struct ShelvesListView: View {
         for index in offsets {
             let shelf = shelves[index].shelf
             do {
-                try appContainer.shelfRepo.deleteAndUnclassify(id: shelf.id)
+                try await appContainer.shelfRepo.deleteAndUnclassify(id: shelf.id)
             } catch {
                 print("Failed to delete shelf: \(error)")
             }
@@ -162,7 +162,7 @@ struct ShelfDetailView: View {
         }
         .task {
             do {
-                books = try appContainer.bookRepo.fetch(byShelfID: shelf.id)
+                books = try await appContainer.bookRepo.fetch(byShelfID: shelf.id)
             } catch {
                 print("Failed to load books: \(error)")
             }
@@ -176,7 +176,7 @@ struct ShelfDetailView: View {
 
     private func deleteShelf() {
         do {
-            try appContainer.shelfRepo.deleteAndUnclassify(id: shelf.id)
+            try await appContainer.shelfRepo.deleteAndUnclassify(id: shelf.id)
         } catch {
             print("Failed to delete shelf: \(error)")
         }
@@ -256,9 +256,9 @@ struct ShelfEditView: View {
 
         do {
             if shelf != nil {
-                shelfItem = try appContainer.shelfRepo.update(shelfItem)
+                shelfItem = try await appContainer.shelfRepo.update(shelfItem)
             } else {
-                shelfItem = try appContainer.shelfRepo.insert(shelfItem)
+                shelfItem = try await appContainer.shelfRepo.insert(shelfItem)
             }
             onSave(shelfItem)
         } catch {

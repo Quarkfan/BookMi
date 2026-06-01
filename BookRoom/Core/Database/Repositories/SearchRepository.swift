@@ -29,7 +29,7 @@ final class SearchRepository {
             let allIDs = Array(ftsIDs.union(pinyinIDs))
             guard !allIDs.isEmpty else { return [] }
 
-            let ph = allIDs.map { "?" }.joined(separator: ",")
+            let ph = allIDs.map { (_: String) in "?" }.joined(separator: ",")
             let sql = "SELECT * FROM books WHERE id IN (\(ph)) AND deleted_at IS NULL"
             let bookArgs: [(any DatabaseValueConvertible)?] = allIDs
             return try Book.fetchAll(db, sql: sql, arguments: StatementArguments(bookArgs))

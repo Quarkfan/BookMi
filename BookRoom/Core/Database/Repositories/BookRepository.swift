@@ -74,7 +74,7 @@ final class BookRepository {
 
     func softDelete(ids: [String]) async throws {
         try await dbQueue.writeWithoutTransaction { (db: Database) in
-            let ph = ids.map { "?" }.joined(separator: ",")
+            let ph = ids.map { (_: String) in "?" }.joined(separator: ",")
             let sql = "UPDATE books SET deleted_at=?, updated_at=? WHERE id IN (\(ph))"
             var args: [any DatabaseValueConvertible] = [ISO8601(), ISO8601()]
             args.append(contentsOf: ids)
@@ -88,7 +88,7 @@ final class BookRepository {
 
     func batchUpdateShelf(bookIDs: [String], shelfID: String?) async throws {
         try await dbQueue.writeWithoutTransaction { (db: Database) in
-            let ph = bookIDs.map { "?" }.joined(separator: ",")
+            let ph = bookIDs.map { (_: String) in "?" }.joined(separator: ",")
             let sql = "UPDATE books SET shelf_id=?, updated_at=? WHERE id IN (\(ph))"
             var args: [any DatabaseValueConvertible] = [shelfID as any DatabaseValueConvertible, ISO8601()]
             args.append(contentsOf: bookIDs)
@@ -98,7 +98,7 @@ final class BookRepository {
 
     func batchUpdateReadingStatus(bookIDs: [String], status: ReadingStatus) async throws {
         try await dbQueue.writeWithoutTransaction { (db: Database) in
-            let ph = bookIDs.map { "?" }.joined(separator: ",")
+            let ph = bookIDs.map { (_: String) in "?" }.joined(separator: ",")
             let sql = "UPDATE books SET reading_status=?, updated_at=? WHERE id IN (\(ph))"
             var args: [any DatabaseValueConvertible] = [status.rawValue, ISO8601()]
             args.append(contentsOf: bookIDs)
@@ -108,7 +108,7 @@ final class BookRepository {
 
     func batchMarkFinished(bookIDs: [String]) async throws {
         try await dbQueue.writeWithoutTransaction { (db: Database) in
-            let ph = bookIDs.map { "?" }.joined(separator: ",")
+            let ph = bookIDs.map { (_: String) in "?" }.joined(separator: ",")
             let sql = "UPDATE books SET reading_status='finished', progress_percent=100, finished_at=?, updated_at=? WHERE id IN (\(ph))"
             var args: [any DatabaseValueConvertible] = [ISO8601(), ISO8601()]
             args.append(contentsOf: bookIDs)

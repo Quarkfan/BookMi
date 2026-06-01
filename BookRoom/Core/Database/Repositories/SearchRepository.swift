@@ -12,9 +12,9 @@ final class SearchRepository {
         let term = trimmed.replacingOccurrences(of: "\"", with: "\"\"")
 
         return try await dbQueue.read { (db: Database) in
-            let ftsSQL = "SELECT fts.book_id FROM books_fts fts WHERE books_fts MATCH ? LIMIT ?"
-            let ftsResults = try Row.fetchAll(db, sql: ftsSQL, arguments: StatementArguments([term.databaseValue, limit.databaseValue]))
-            let ftsIDs = Set(ftsResults.map { (row: Row) in row["book_id"] as String })
+            let ftsArgs: [String] = [term, String(limit)]
+            let ftsResults = try Row.fetchAll(db, sql: "SELECT fts.book_id FROM books_fts fts WHERE books_fts MATCH ? LIMIT ?", arguments: ftsArgs)
+            let ftsIDs = Set(ftsResults.map { $0["book_id"] as String })
 
             let pinyinSQL = """
                 SELECT book_id FROM search_index
@@ -22,16 +22,17 @@ final class SearchRepository {
                 OR pinyin_authors_full LIKE ? OR pinyin_authors_initials LIKE ?
                 LIMIT ?
                 """
-            let pinyinArgs: [DatabaseValue] = ["%\(pe.full)%", "%\(pe.initials)%", "%\(pe.full)%", "%\(pe.initials)%"].map { $0.databaseValue } + [limit.databaseValue]
-            let pinyinResults = try Row.fetchAll(db, sql: pinyinSQL, arguments: StatementArguments(pinyinArgs))
-            let pinyinIDs = Set(pinyinResults.map { (row: Row) in row["book_id"] as String })
+            let pinyinArgs: [String] = ["%\(pe.full)%", "%\(pe.initials)%", "%\(pe.full)%", "%\(pe.initials)%", String(limit)]
+            let pinyinResults = try Row.fetchAll(db, sql: pinyinSQL, arguments: pinyinArgs)
+            let pinyinIDs = Set(pinyinResults.map { $0["book_id"] as String })
 
             let allIDs = Array(ftsIDs.union(pinyinIDs))
             guard !allIDs.isEmpty else { return [] }
 
             let ph = allIDs.map { "?" }.joined(separator: ",")
             let sql = "SELECT * FROM books WHERE id IN (\(ph)) AND deleted_at IS NULL"
-            return try Book.fetchAll(db, sql: sql, arguments: StatementArguments(allIDs))
+            let bookArgs: [String] = allIDs
+            return try Book.fetchAll(db, sql: sql, arguments: bookArgs)
         }
     }
 
@@ -57,7 +58,7 @@ final class SearchRepository {
                 "%\(kw)%", "%\(kw)%", "%\(kw)%", "%\(pe.full)%", "%\(pe.initials)%",
                 "%\(pe.full)%", "%\(pe.initials)%", "%\(kw)%", "%\(kw)%", "\(limit)"
             ]
-            return try Book.fetchAll(db, sql: sql, arguments: StatementArguments(args))
+            return try Book.fetchAll(db, sql: sql, arguments: args)
         }
     }
 
@@ -94,7 +95,7 @@ final class SearchRepository {
                     updated_at = excluded.updated_at
                 """
             let a = indexArgs(entry)
-            try db.execute(sql: sql, arguments: StatementArguments(a))
+            try db.execute(sql: sql, arguments: a)
         }
     }
 
@@ -115,7 +116,7 @@ final class SearchRepository {
                         pinyin_title_full, pinyin_title_initials, pinyin_authors_full, pinyin_authors_initials,
                         combined_search_text, updated_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, arguments: StatementArguments(args))
+                    """, arguments: args)
             }
         }
     }
@@ -126,14 +127,14 @@ final class SearchRepository {
             for book in books {
                 let tp = Pinyin.analyze(book.title)
                 let ap = Pinyin.analyze(parseJSON(book.authorsJSON).joined(separator: " "))
-                let args: [DatabaseValue] = [tp.full, tp.initials, ap.full, ap.initials, ISO8601(), book.id].map { $0.databaseValue }
+                let args: [String] = [tp.full, tp.initials, ap.full, ap.initials, ISO8601(), book.id]
                 try db.execute(sql: """
                     UPDATE search_index SET
                         pinyin_title_full = ?, pinyin_title_initials = ?,
                         pinyin_authors_full = ?, pinyin_authors_initials = ?,
                         updated_at = ?
                     WHERE book_id = ?
-                    """, arguments: StatementArguments(args))
+                    """, arguments: args)
             }
         }
     }

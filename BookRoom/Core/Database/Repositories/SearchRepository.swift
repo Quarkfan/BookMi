@@ -14,7 +14,7 @@ final class SearchRepository {
         return try await dbQueue.read { (db: Database) in
             let ftsArgs: [(any DatabaseValueConvertible)?] = [term, limit]
             let ftsResults = try Row.fetchAll(db, sql: "SELECT fts.book_id FROM books_fts fts WHERE books_fts MATCH ? LIMIT ?", arguments: StatementArguments(ftsArgs))
-            let ftsIDs = Set(ftsResults.map { $0["book_id"] as String })
+            let ftsIDs = Set(ftsResults.map { (row: Row) in row["book_id"] as String })
 
             let pinyinSQL = """
                 SELECT book_id FROM search_index
@@ -24,7 +24,7 @@ final class SearchRepository {
                 """
             let pArgs: [(any DatabaseValueConvertible)?] = ["%\(pe.full)%", "%\(pe.initials)%", "%\(pe.full)%", "%\(pe.initials)%", limit]
             let pinyinResults = try Row.fetchAll(db, sql: pinyinSQL, arguments: StatementArguments(pArgs))
-            let pinyinIDs = Set(pinyinResults.map { $0["book_id"] as String })
+            let pinyinIDs = Set(pinyinResults.map { (row: Row) in row["book_id"] as String })
 
             let allIDs = Array(ftsIDs.union(pinyinIDs))
             guard !allIDs.isEmpty else { return [] }

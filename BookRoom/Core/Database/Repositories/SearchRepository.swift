@@ -12,7 +12,9 @@ final class SearchRepository {
         let term = trimmed.replacingOccurrences(of: "\"", with: "\"\"")
 
         return try await dbQueue.read { (db: Database) in
-            let ftsArgs: [String] = [term, String(limit)]
+            var ftsArgs = StatementArguments()
+            ftsArgs.append(term)
+            ftsArgs.append(limit)
             let ftsResults = try Row.fetchAll(db, sql: "SELECT fts.book_id FROM books_fts fts WHERE books_fts MATCH ? LIMIT ?", arguments: ftsArgs)
             let ftsIDs = Set(ftsResults.map { $0["book_id"] as String })
 
@@ -22,8 +24,13 @@ final class SearchRepository {
                 OR pinyin_authors_full LIKE ? OR pinyin_authors_initials LIKE ?
                 LIMIT ?
                 """
-            let pinyinArgs: [String] = ["%\(pe.full)%", "%\(pe.initials)%", "%\(pe.full)%", "%\(pe.initials)%", String(limit)]
-            let pinyinResults = try Row.fetchAll(db, sql: pinyinSQL, arguments: pinyinArgs)
+            var pArgs = StatementArguments()
+            pArgs.append("%\(pe.full)%")
+            pArgs.append("%\(pe.initials)%")
+            pArgs.append("%\(pe.full)%")
+            pArgs.append("%\(pe.initials)%")
+            pArgs.append(limit)
+            let pinyinResults = try Row.fetchAll(db, sql: pinyinSQL, arguments: pArgs)
             let pinyinIDs = Set(pinyinResults.map { $0["book_id"] as String })
 
             let allIDs = Array(ftsIDs.union(pinyinIDs))
@@ -31,7 +38,8 @@ final class SearchRepository {
 
             let ph = allIDs.map { "?" }.joined(separator: ",")
             let sql = "SELECT * FROM books WHERE id IN (\(ph)) AND deleted_at IS NULL"
-            let bookArgs: [String] = allIDs
+            var bookArgs = StatementArguments()
+            for id in allIDs { bookArgs.append(id) }
             return try Book.fetchAll(db, sql: sql, arguments: bookArgs)
         }
     }
@@ -54,10 +62,14 @@ final class SearchRepository {
                     OR LOWER(b.isbn13) LIKE ?
                 ) LIMIT ?
                 """
-            let args: [String] = [
-                "%\(kw)%", "%\(kw)%", "%\(kw)%", "%\(pe.full)%", "%\(pe.initials)%",
-                "%\(pe.full)%", "%\(pe.initials)%", "%\(kw)%", "%\(kw)%", "\(limit)"
-            ]
+            var args = StatementArguments()
+            for _ in 0..<3 { args.append("%\(kw)%") }
+            args.append("%\(pe.full)%")
+            args.append("%\(pe.initials)%")
+            args.append("%\(pe.full)%")
+            args.append("%\(pe.initials)%")
+            for _ in 0..<2 { args.append("%\(kw)%") }
+            args.append(limit)
             return try Book.fetchAll(db, sql: sql, arguments: args)
         }
     }
@@ -94,8 +106,10 @@ final class SearchRepository {
                     combined_search_text = excluded.combined_search_text,
                     updated_at = excluded.updated_at
                 """
-            let a = indexArgs(entry)
-            try db.execute(sql: sql, arguments: a)
+            var args = StatementArguments()
+            for v in indexArgs(entry) { args.append(v) }
+            args.append(ISO8601())
+            try db.execute(sql: sql, arguments: args)
         }
     }
 
@@ -108,7 +122,9 @@ final class SearchRepository {
                 let entry = SearchIndexEntry.from(title: book.title, authors: [], translators: [],
                     publisher: book.publisher, isbn: book.isbn13 ?? book.isbn10,
                     tags: [], shelf: nil, location: book.locationDetail, purchaseChannel: nil, bookID: book.id)
-                let args = indexArgs(entry)
+                var args = StatementArguments()
+                for v in indexArgs(entry) { args.append(v) }
+                args.append(ISO8601())
                 try db.execute(sql: """
                     INSERT INTO search_index (book_id, normalized_title, normalized_authors, normalized_translators,
                         normalized_publisher, normalized_isbn, normalized_tags, normalized_shelf,
@@ -127,7 +143,13 @@ final class SearchRepository {
             for book in books {
                 let tp = Pinyin.analyze(book.title)
                 let ap = Pinyin.analyze(parseJSON(book.authorsJSON).joined(separator: " "))
-                let args: [String] = [tp.full, tp.initials, ap.full, ap.initials, ISO8601(), book.id]
+                var args = StatementArguments()
+                args.append(tp.full)
+                args.append(tp.initials)
+                args.append(ap.full)
+                args.append(ap.initials)
+                args.append(ISO8601())
+                args.append(book.id)
                 try db.execute(sql: """
                     UPDATE search_index SET
                         pinyin_title_full = ?, pinyin_title_initials = ?,
@@ -145,24 +167,13 @@ private func parseJSON(_ json: String?) -> [String] {
     return arr
 }
 
-private func indexArgs(_ entry: SearchIndexEntry) -> [DatabaseValue] {
+private func indexArgs(_ entry: SearchIndexEntry) -> [String] {
     [
-        entry.bookID.databaseValue,
-        entry.normalizedTitle.databaseValue,
-        entry.normalizedAuthors.databaseValue,
-        entry.normalizedTranslators.databaseValue,
-        entry.normalizedPublisher.databaseValue,
-        entry.normalizedISBN.databaseValue,
-        entry.normalizedTags.databaseValue,
-        entry.normalizedShelf.databaseValue,
-        entry.normalizedLocation.databaseValue,
-        entry.normalizedPurchaseChannel.databaseValue,
-        entry.pinyinTitleFull.databaseValue,
-        entry.pinyinTitleInitials.databaseValue,
-        entry.pinyinAuthorsFull.databaseValue,
-        entry.pinyinAuthorsInitials.databaseValue,
-        entry.combinedSearchText.databaseValue,
-        ISO8601().databaseValue
+        entry.bookID, entry.normalizedTitle, entry.normalizedAuthors, entry.normalizedTranslators,
+        entry.normalizedPublisher, entry.normalizedISBN, entry.normalizedTags, entry.normalizedShelf,
+        entry.normalizedLocation, entry.normalizedPurchaseChannel,
+        entry.pinyinTitleFull, entry.pinyinTitleInitials, entry.pinyinAuthorsFull, entry.pinyinAuthorsInitials,
+        entry.combinedSearchText
     ]
 }
 

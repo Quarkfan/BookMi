@@ -22,8 +22,8 @@ final class SearchRepository {
                 OR pinyin_authors_full LIKE ? OR pinyin_authors_initials LIKE ?
                 LIMIT ?
                 """
-            let pinyinResults = try Row.fetchAll(db, sql: pinyinSQL, arguments: StatementArguments(
-                ["%\(pe.full)%", "%\(pe.initials)%", "%\(pe.full)%", "%\(pe.initials)%"].map { $0.databaseValue } + [limit.databaseValue]))
+            let pinyinArgs: [DatabaseValue] = ["%\(pe.full)%", "%\(pe.initials)%", "%\(pe.full)%", "%\(pe.initials)%"].map { $0.databaseValue } + [limit.databaseValue]
+            let pinyinResults = try Row.fetchAll(db, sql: pinyinSQL, arguments: StatementArguments(pinyinArgs))
             let pinyinIDs = Set(pinyinResults.map { (row: Row) in row["book_id"] as String })
 
             let allIDs = Array(ftsIDs.union(pinyinIDs))
@@ -126,13 +126,14 @@ final class SearchRepository {
             for book in books {
                 let tp = Pinyin.analyze(book.title)
                 let ap = Pinyin.analyze(parseJSON(book.authorsJSON).joined(separator: " "))
+                let args: [DatabaseValue] = [tp.full, tp.initials, ap.full, ap.initials, ISO8601(), book.id].map { $0.databaseValue }
                 try db.execute(sql: """
                     UPDATE search_index SET
                         pinyin_title_full = ?, pinyin_title_initials = ?,
                         pinyin_authors_full = ?, pinyin_authors_initials = ?,
                         updated_at = ?
                     WHERE book_id = ?
-                    """, arguments: StatementArguments([tp.full, tp.initials, ap.full, ap.initials, ISO8601(), book.id].map { $0.databaseValue }))
+                    """, arguments: StatementArguments(args))
             }
         }
     }

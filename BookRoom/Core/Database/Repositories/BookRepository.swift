@@ -53,7 +53,7 @@ final class BookRepository {
     }
 
     @discardableResult func insert(_ book: Book) async throws -> Book {
-        try await dbQueue.write { db in
+        try await dbQueue.writeWithoutTransaction { db in
             var b = book
             try b.insert(db)
             return b
@@ -61,7 +61,7 @@ final class BookRepository {
     }
 
     @discardableResult func update(_ book: Book) async throws -> Book {
-        try await dbQueue.write { db in
+        try await dbQueue.writeWithoutTransaction { db in
             var b = book
             b.updatedAt = ISO8601()
             try b.update(db)
@@ -70,7 +70,7 @@ final class BookRepository {
     }
 
     func softDelete(id: String) async throws {
-        try await dbQueue.write { db in
+        try await dbQueue.writeWithoutTransaction { db in
             try db.execute(
                 sql: "UPDATE books SET deleted_at = ?, updated_at = ? WHERE id = ?",
                 arguments: [ISO8601(), ISO8601(), id])
@@ -78,99 +78,106 @@ final class BookRepository {
     }
 
     func softDelete(ids: [String]) async throws {
-        try await dbQueue.write { db in
-            try db.execute(
-                sql: "UPDATE books SET deleted_at = ?, updated_at = ? WHERE id IN (?)",
-                arguments: [ISO8601(), ISO8601(), ids.joined(separator: ",")])
+        try await dbQueue.writeWithoutTransaction { db in
+            let ph = ids.map { "?" }.joined(separator: ",")
+            let sql = "UPDATE books SET deleted_at = ?, updated_at = ? WHERE id IN (\(ph))"
+            var args: [any DatabaseValueConvertible] = [ISO8601(), ISO8601()]
+            args.append(contentsOf: ids)
+            try db.execute(sql: sql, arguments: args)
         }
     }
 
     func permanentDelete(id: String) async throws {
-        try await dbQueue.write { db in try Book.deleteOne(db, key: id) }
+        try await dbQueue.writeWithoutTransaction { db in try Book.deleteOne(db, key: id) }
     }
 
     func batchUpdateShelf(bookIDs: [String], shelfID: String?) async throws {
-        try await dbQueue.write { db in
-            let sv: DatabaseValue = shelfID.map { .string($0) } ?? .null
-            try db.execute(
-                sql: """UPDATE books SET shelf_id = ?, updated_at = ? WHERE id IN (\(bookIDs.map { _ in "?" }.joined(separator: ",")))""",
-                arguments: [sv, ISO8601()] + bookIDs.map { .string($0) })
+        try await dbQueue.writeWithoutTransaction { db in
+            let ph = bookIDs.map { "?" }.joined(separator: ",")
+            let sql = "UPDATE books SET shelf_id = ?, updated_at = ? WHERE id IN (\(ph))"
+            var args: [any DatabaseValueConvertible] = [shelfID as any DatabaseValueConvertible, ISO8601()]
+            args.append(contentsOf: bookIDs)
+            try db.execute(sql: sql, arguments: args)
         }
     }
 
     func batchUpdateReadingStatus(bookIDs: [String], status: ReadingStatus) async throws {
-        try await dbQueue.write { db in
-            try db.execute(
-                sql: """UPDATE books SET reading_status = ?, updated_at = ? WHERE id IN (\(bookIDs.map { _ in "?" }.joined(separator: ",")))""",
-                arguments: [status.rawValue, ISO8601()] + bookIDs.map { .string($0) })
+        try await dbQueue.writeWithoutTransaction { db in
+            let ph = bookIDs.map { "?" }.joined(separator: ",")
+            let sql = "UPDATE books SET reading_status = ?, updated_at = ? WHERE id IN (\(ph))"
+            var args: [any DatabaseValueConvertible] = [status.rawValue, ISO8601()]
+            args.append(contentsOf: bookIDs)
+            try db.execute(sql: sql, arguments: args)
         }
     }
 
     func batchMarkFinished(bookIDs: [String]) async throws {
-        try await dbQueue.write { db in
-            try db.execute(
-                sql: """UPDATE books SET reading_status = 'finished', progress_percent = 100, finished_at = ?, updated_at = ? WHERE id IN (\(bookIDs.map { _ in "?" }.joined(separator: ",")))""",
-                arguments: [ISO8601(), ISO8601()] + bookIDs.map { .string($0) })
+        try await dbQueue.writeWithoutTransaction { db in
+            let ph = bookIDs.map { "?" }.joined(separator: ",")
+            let sql = "UPDATE books SET reading_status = 'finished', progress_percent = 100, finished_at = ?, updated_at = ? WHERE id IN (\(ph))"
+            var args: [any DatabaseValueConvertible] = [ISO8601(), ISO8601()]
+            args.append(contentsOf: bookIDs)
+            try db.execute(sql: sql, arguments: args)
         }
     }
 
     func countByYear() async throws -> [(year: String, count: Int)] {
         try await dbQueue.read { db in
-            try Row.fetchAll(db, sql: """SELECT strftime('%Y', created_at) as year, COUNT(*) as count FROM books WHERE deleted_at IS NULL GROUP BY year ORDER BY year DESC""")
+            try Row.fetchAll(db, sql: "SELECT strftime('%Y', created_at) as year, COUNT(*) as count FROM books WHERE deleted_at IS NULL GROUP BY year ORDER BY year DESC")
                 .map { ($0["year"] as String, $0["count"] as Int) }
         }
     }
 
     func countByShelf() async throws -> [(shelfID: String?, shelfName: String?, count: Int)] {
         try await dbQueue.read { db in
-            try Row.fetchAll(db, sql: """SELECT b.shelf_id, s.name as shelf_name, COUNT(*) as count FROM books b LEFT JOIN shelves s ON b.shelf_id = s.id WHERE b.deleted_at IS NULL GROUP BY b.shelf_id ORDER BY count DESC""")
+            try Row.fetchAll(db, sql: "SELECT b.shelf_id, s.name as shelf_name, COUNT(*) as count FROM books b LEFT JOIN shelves s ON b.shelf_id = s.id WHERE b.deleted_at IS NULL GROUP BY b.shelf_id ORDER BY count DESC")
                 .map { ($0["shelf_id"] as String?, $0["shelf_name"] as String?, $0["count"] as Int) }
         }
     }
 
     func countByReadingStatus() async throws -> [(status: String, count: Int)] {
         try await dbQueue.read { db in
-            try Row.fetchAll(db, sql: """SELECT reading_status as status, COUNT(*) as count FROM books WHERE deleted_at IS NULL GROUP BY reading_status""")
+            try Row.fetchAll(db, sql: "SELECT reading_status as status, COUNT(*) as count FROM books WHERE deleted_at IS NULL GROUP BY reading_status")
                 .map { ($0["status"] as String, $0["count"] as Int) }
         }
     }
 
     func countDuplicatesByISBN() async throws -> [(isbn: String, count: Int)] {
         try await dbQueue.read { db in
-            try Row.fetchAll(db, sql: """SELECT COALESCE(isbn13, isbn10) as isbn, COUNT(*) as count FROM books WHERE deleted_at IS NULL AND (isbn10 IS NOT NULL OR isbn13 IS NOT NULL) GROUP BY COALESCE(isbn13, isbn10) HAVING count > 1 ORDER BY count DESC""")
+            try Row.fetchAll(db, sql: "SELECT COALESCE(isbn13, isbn10) as isbn, COUNT(*) as count FROM books WHERE deleted_at IS NULL AND (isbn10 IS NOT NULL OR isbn13 IS NOT NULL) GROUP BY COALESCE(isbn13, isbn10) HAVING count > 1 ORDER BY count DESC")
                 .map { ($0["isbn"] as String, $0["count"] as Int) }
         }
     }
 
     func countByPublisher() async throws -> [(name: String, count: Int)] {
         try await dbQueue.read { db in
-            try Row.fetchAll(db, sql: """SELECT publisher as name, COUNT(*) as count FROM books WHERE deleted_at IS NULL AND publisher IS NOT NULL GROUP BY publisher ORDER BY count DESC LIMIT 20""")
+            try Row.fetchAll(db, sql: "SELECT publisher as name, COUNT(*) as count FROM books WHERE deleted_at IS NULL AND publisher IS NOT NULL GROUP BY publisher ORDER BY count DESC LIMIT 20")
                 .map { ($0["name"] as String, $0["count"] as Int) }
         }
     }
 
     func countByPurchaseChannel() async throws -> [(name: String?, count: Int)] {
         try await dbQueue.read { db in
-            try Row.fetchAll(db, sql: """SELECT pc.name as name, COUNT(*) as count FROM books b LEFT JOIN purchase_channels pc ON b.purchase_channel_id = pc.id WHERE b.deleted_at IS NULL GROUP BY b.purchase_channel_id ORDER BY count DESC""")
+            try Row.fetchAll(db, sql: "SELECT pc.name as name, COUNT(*) as count FROM books b LEFT JOIN purchase_channels pc ON b.purchase_channel_id = pc.id WHERE b.deleted_at IS NULL GROUP BY b.purchase_channel_id ORDER BY count DESC")
                 .map { ($0["name"] as String?, $0["count"] as Int) }
         }
     }
 
     func countMissingISBN() async throws -> Int {
         try await dbQueue.read { db in
-            try Int.fetchOne(db, sql: """SELECT COUNT(*) FROM books WHERE deleted_at IS NULL AND isbn10 IS NULL AND isbn13 IS NULL""") ?? 0
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM books WHERE deleted_at IS NULL AND isbn10 IS NULL AND isbn13 IS NULL") ?? 0
         }
     }
 
     func countMissingCovers() async throws -> Int {
         try await dbQueue.read { db in
-            try Int.fetchOne(db, sql: """SELECT COUNT(*) FROM books WHERE deleted_at IS NULL AND cover_file_name IS NULL""") ?? 0
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM books WHERE deleted_at IS NULL AND cover_file_name IS NULL") ?? 0
         }
     }
 
     func countMissingShelf() async throws -> Int {
         try await dbQueue.read { db in
-            try Int.fetchOne(db, sql: """SELECT COUNT(*) FROM books WHERE deleted_at IS NULL AND shelf_id IS NULL""") ?? 0
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM books WHERE deleted_at IS NULL AND shelf_id IS NULL") ?? 0
         }
     }
 }

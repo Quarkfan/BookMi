@@ -6,7 +6,7 @@ final class TagRepository {
     init(dbQueue: DatabaseQueue) { self.dbQueue = dbQueue }
 
     func fetchAll() async throws -> [Tag] {
-        try await dbQueue.read { (db: Database) in
+        try await dbQueue.read { db in
             try Tag.filter(Column("deleted_at") == nil)
                 .order(Column("sort_order").asc, Column("name").asc)
                 .fetchAll(db)
@@ -14,11 +14,11 @@ final class TagRepository {
     }
 
     func fetch(byID id: String) async throws -> Tag? {
-        try await dbQueue.read { (db: Database) in try Tag.fetchOne(db, key: id) }
+        try await dbQueue.read { db in try Tag.fetchOne(db, key: id) }
     }
 
     func fetch(byName name: String) async throws -> Tag? {
-        try await dbQueue.read { (db: Database) in
+        try await dbQueue.read { db in
             try Tag.filter(Column("deleted_at") == nil)
                 .filter(Column("name") == name)
                 .fetchOne(db)
@@ -26,7 +26,7 @@ final class TagRepository {
     }
 
     func fetchTags(forBookID bookID: String) async throws -> [Tag] {
-        try await dbQueue.read { (db: Database) in
+        try await dbQueue.read { db in
             let ids = try BookTag.filter(Column("book_id") == bookID).fetchAll(db).map(\.tagID)
             guard !ids.isEmpty else { return [] }
             return try Tag.filter(Column("deleted_at") == nil)
@@ -37,7 +37,7 @@ final class TagRepository {
     }
 
     func fetchAllWithCounts() async throws -> [(tag: Tag, bookCount: Int)] {
-        try await dbQueue.read { (db: Database) in
+        try await dbQueue.read { db in
             let tags = try Tag.filter(Column("deleted_at") == nil)
                 .order(Column("name").asc)
                 .fetchAll(db)
@@ -49,59 +49,62 @@ final class TagRepository {
     }
 
     @discardableResult func insert(_ tag: Tag) async throws -> Tag {
-        try await dbQueue.write { (db: Database) in
-            var t = tag
-            try t.insert(db)
-            return t
+        let now = ISO8601()
+        let sql = "INSERT INTO tags (id, name, color, sort_order, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        try await dbQueue.writeWithoutTransaction { db in
+            try db.execute(sql: sql, arguments: [tag.id, tag.name, tag.color, tag.sortOrder, now, now, tag.deletedAt])
         }
+        return tag
     }
 
     @discardableResult func update(_ tag: Tag) async throws -> Tag {
-        try await dbQueue.write { (db: Database) in
-            var t = tag
-            t.updatedAt = ISO8601()
-            try t.update(db)
-            return t
+        let now = ISO8601()
+        let sql = "UPDATE tags SET name=?, color=?, sort_order=?, updated_at=? WHERE id=?"
+        try await dbQueue.writeWithoutTransaction { db in
+            try db.execute(sql: sql, arguments: [tag.name, tag.color, tag.sortOrder, now, tag.id])
         }
+        return tag
     }
 
     func getOrCreate(name: String, color: String? = nil) async throws -> Tag {
         if let existing = try await fetch(byName: name) { return existing }
-        let now = ISO8601()
-        return try await insert(Tag(id: UUID().uuidString, name: name, color: color, sortOrder: 0, createdAt: now, updatedAt: now, deletedAt: nil))
+        let newTag = Tag(id: UUID().uuidString, name: name, color: color, sortOrder: 0, createdAt: ISO8601(), updatedAt: ISO8601(), deletedAt: nil)
+        return try await insert(newTag)
     }
 
     func delete(id: String) async throws {
-        try await dbQueue.write { (db: Database) in
-            try db.execute(sql: "DELETE FROM book_tags WHERE tag_id = ?", arguments: [id])
-            try db.execute(sql: "DELETE FROM tags WHERE id = ?", arguments: [id])
+        try await dbQueue.writeWithoutTransaction { db in
+            try db.execute(sql: "DELETE FROM book_tags WHERE tag_id=?", arguments: [id])
+            try db.execute(sql: "DELETE FROM tags WHERE id=?", arguments: [id])
         }
     }
 
     func addTag(tagID: String, toBook bookID: String) async throws {
-        try await dbQueue.write { (db: Database) in
-            try BookTag(bookID: bookID, tagID: tagID, createdAt: ISO8601()).insert(db, onConflict: .ignore)
+        let now = ISO8601()
+        try await dbQueue.writeWithoutTransaction { db in
+            try BookTag(bookID: bookID, tagID: tagID, createdAt: now).insert(db, onConflict: .ignore)
         }
     }
 
     func removeTag(tagID: String, fromBook bookID: String) async throws {
-        try await dbQueue.write { (db: Database) in
-            try db.execute(sql: "DELETE FROM book_tags WHERE book_id = ? AND tag_id = ?", arguments: [bookID, tagID])
+        try await dbQueue.writeWithoutTransaction { db in
+            try db.execute(sql: "DELETE FROM book_tags WHERE book_id=? AND tag_id=?", arguments: [bookID, tagID])
         }
     }
 
     func setTags(tagIDs: [String], forBook bookID: String) async throws {
-        try await dbQueue.write { (db: Database) in
-            try db.execute(sql: "DELETE FROM book_tags WHERE book_id = ?", arguments: [bookID])
+        let now = ISO8601()
+        try await dbQueue.writeWithoutTransaction { db in
+            try db.execute(sql: "DELETE FROM book_tags WHERE book_id=?", arguments: [bookID])
             for tagID in tagIDs {
-                try BookTag(bookID: bookID, tagID: tagID, createdAt: ISO8601()).insert(db, onConflict: .ignore)
+                try BookTag(bookID: bookID, tagID: tagID, createdAt: now).insert(db, onConflict: .ignore)
             }
         }
     }
 
     func addTags(tagIDs: [String], toBooks bookIDs: [String]) async throws {
-        try await dbQueue.write { (db: Database) in
-            let now = ISO8601()
+        let now = ISO8601()
+        try await dbQueue.writeWithoutTransaction { db in
             for bookID in bookIDs {
                 for tagID in tagIDs {
                     try BookTag(bookID: bookID, tagID: tagID, createdAt: now).insert(db, onConflict: .ignore)
@@ -111,11 +114,13 @@ final class TagRepository {
     }
 
     func removeTags(tagIDs: [String], fromBooks bookIDs: [String]) async throws {
-        try await dbQueue.write { (db: Database) in
-            let ph = bookIDs.map { _ in "?" }.joined(separator: ",")
+        try await dbQueue.writeWithoutTransaction { db in
+            let ph1 = bookIDs.map { _ in "?" }.joined(separator: ",")
             let ph2 = tagIDs.map { _ in "?" }.joined(separator: ",")
-            try db.execute(sql: "DELETE FROM book_tags WHERE book_id IN (\(ph)) AND tag_id IN (\(ph2))",
-                arguments: bookIDs.map { .string($0) } + tagIDs.map { .string($0) })
+            var args: [any DatabaseValueConvertible] = []
+            args.append(contentsOf: bookIDs)
+            args.append(contentsOf: tagIDs)
+            try db.execute(sql: "DELETE FROM book_tags WHERE book_id IN (\(ph1)) AND tag_id IN (\(ph2))", arguments: args)
         }
     }
 }

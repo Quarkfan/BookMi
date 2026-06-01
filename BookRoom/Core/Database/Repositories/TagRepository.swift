@@ -50,18 +50,21 @@ final class TagRepository {
 
     @discardableResult func insert(_ tag: Tag) async throws -> Tag {
         let now = ISO8601()
-        let sql = "INSERT INTO tags (id, name, color, sort_order, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
         try await dbQueue.writeWithoutTransaction { db in
-            try db.execute(sql: sql, arguments: [tag.id, tag.name, tag.color, tag.sortOrder, now, now, tag.deletedAt])
+            try db.execute(sql: """
+                INSERT INTO tags (id, name, color, sort_order, created_at, updated_at, deleted_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, arguments: [tag.id, tag.name, tag.color, tag.sortOrder, now, now, tag.deletedAt])
         }
         return tag
     }
 
     @discardableResult func update(_ tag: Tag) async throws -> Tag {
         let now = ISO8601()
-        let sql = "UPDATE tags SET name=?, color=?, sort_order=?, updated_at=? WHERE id=?"
         try await dbQueue.writeWithoutTransaction { db in
-            try db.execute(sql: sql, arguments: [tag.name, tag.color, tag.sortOrder, now, tag.id])
+            try db.execute(sql: """
+                UPDATE tags SET name=?, color=?, sort_order=?, updated_at=? WHERE id=?
+                """, arguments: [tag.name, tag.color, tag.sortOrder, now, tag.id])
         }
         return tag
     }
@@ -82,7 +85,8 @@ final class TagRepository {
     func addTag(tagID: String, toBook bookID: String) async throws {
         let now = ISO8601()
         try await dbQueue.writeWithoutTransaction { db in
-            try BookTag(bookID: bookID, tagID: tagID, createdAt: now).insert(db, onConflict: .ignore)
+            try db.execute(sql: "INSERT INTO book_tags (book_id, tag_id, created_at) VALUES (?, ?, ?)",
+                arguments: [bookID, tagID, now])
         }
     }
 
@@ -97,7 +101,8 @@ final class TagRepository {
         try await dbQueue.writeWithoutTransaction { db in
             try db.execute(sql: "DELETE FROM book_tags WHERE book_id=?", arguments: [bookID])
             for tagID in tagIDs {
-                try BookTag(bookID: bookID, tagID: tagID, createdAt: now).insert(db, onConflict: .ignore)
+                try db.execute(sql: "INSERT INTO book_tags (book_id, tag_id, created_at) VALUES (?, ?, ?)",
+                    arguments: [bookID, tagID, now])
             }
         }
     }
@@ -107,7 +112,8 @@ final class TagRepository {
         try await dbQueue.writeWithoutTransaction { db in
             for bookID in bookIDs {
                 for tagID in tagIDs {
-                    try BookTag(bookID: bookID, tagID: tagID, createdAt: now).insert(db, onConflict: .ignore)
+                    try db.execute(sql: "INSERT INTO book_tags (book_id, tag_id, created_at) VALUES (?, ?, ?)",
+                        arguments: [bookID, tagID, now])
                 }
             }
         }
@@ -117,10 +123,10 @@ final class TagRepository {
         try await dbQueue.writeWithoutTransaction { db in
             let ph1 = bookIDs.map { _ in "?" }.joined(separator: ",")
             let ph2 = tagIDs.map { _ in "?" }.joined(separator: ",")
-            var args: [any DatabaseValueConvertible] = []
-            args.append(contentsOf: bookIDs)
+            var args: [any DatabaseValueConvertible] = bookIDs
             args.append(contentsOf: tagIDs)
-            try db.execute(sql: "DELETE FROM book_tags WHERE book_id IN (\(ph1)) AND tag_id IN (\(ph2))", arguments: args)
+            try db.execute(sql: "DELETE FROM book_tags WHERE book_id IN (\(ph1)) AND tag_id IN (\(ph2))",
+                arguments: args)
         }
     }
 }

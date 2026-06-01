@@ -219,13 +219,13 @@ struct BookDetailView: View {
 
             // Load purchase channel
             if let channelID = book.purchaseChannelID {
-                purchaseChannel = try await appContainer.dbQueue.read { (db: Database) in
+                purchaseChannel = try await appContainer.databaseManager.dbQueue.read { (db: Database) in
                     try PurchaseChannel.fetchOne(db, key: channelID)
                 }
             }
 
             // Load active borrow record
-            borrowRecord = try await appContainer.dbQueue.read { (db: Database) in
+            borrowRecord = try await appContainer.databaseManager.dbQueue.read { (db: Database) in
                 try BorrowRecord
                     .filter(Column("book_id") == book.id)
                     .filter(Column("status") == "borrowed")

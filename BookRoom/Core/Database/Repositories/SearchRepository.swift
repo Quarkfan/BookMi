@@ -13,8 +13,8 @@ final class SearchRepository {
 
         return try await dbQueue.read { (db: Database) in
             let ftsSQL = "SELECT fts.book_id FROM books_fts fts WHERE books_fts MATCH ? LIMIT ?"
-            let ftsResults = try Row.fetchAll(db, sql: ftsSQL, arguments: [term, limit])
-            let ftsIDs = Set(ftsResults.map { $0["book_id"] as String })
+            let ftsResults = try Row.fetchAll(db, sql: ftsSQL, arguments: StatementArguments([term, limit]))
+            let ftsIDs = Set(ftsResults.map { (row: Row) in row["book_id"] as String })
 
             let pinyinSQL = """
                 SELECT book_id FROM search_index
@@ -22,15 +22,15 @@ final class SearchRepository {
                 OR pinyin_authors_full LIKE ? OR pinyin_authors_initials LIKE ?
                 LIMIT ?
                 """
-            let pinyinResults = try Row.fetchAll(db, sql: pinyinSQL, arguments: ["%\(pe.full)%", "%\(pe.initials)%", "%\(pe.full)%", "%\(pe.initials)%", limit])
-            let pinyinIDs = Set(pinyinResults.map { $0["book_id"] as String })
+            let pinyinResults = try Row.fetchAll(db, sql: pinyinSQL, arguments: StatementArguments(["%\(pe.full)%", "%\(pe.initials)%", "%\(pe.full)%", "%\(pe.initials)%", limit]))
+            let pinyinIDs = Set(pinyinResults.map { (row: Row) in row["book_id"] as String })
 
             let allIDs = Array(ftsIDs.union(pinyinIDs))
             guard !allIDs.isEmpty else { return [] }
 
             let ph = allIDs.map { "?" }.joined(separator: ",")
             let sql = "SELECT * FROM books WHERE id IN (\(ph)) AND deleted_at IS NULL"
-            return try Book.fetchAll(db, sql: sql, arguments: allIDs.map { $0 as any DatabaseValueConvertible })
+            return try Book.fetchAll(db, sql: sql, arguments: StatementArguments(allIDs))
         }
     }
 
@@ -56,7 +56,7 @@ final class SearchRepository {
                 "%\(kw)%", "%\(kw)%", "%\(kw)%", "%\(pe.full)%", "%\(pe.initials)%",
                 "%\(pe.full)%", "%\(pe.initials)%", "%\(kw)%", "%\(kw)%", "\(limit)"
             ]
-            return try Book.fetchAll(db, sql: sql, arguments: args.map { $0 as any DatabaseValueConvertible })
+            return try Book.fetchAll(db, sql: sql, arguments: StatementArguments(args))
         }
     }
 
@@ -93,14 +93,14 @@ final class SearchRepository {
                     updated_at = excluded.updated_at
                 """
             let a = indexArgs(entry)
-            try db.execute(sql: sql, arguments: a.map { $0 as any DatabaseValueConvertible })
+            try db.execute(sql: sql, arguments: StatementArguments(a))
         }
     }
 
     func rebuildIndex() async throws {
         try await dbQueue.writeWithoutTransaction { (db: Database) in
-            try db.execute(sql: "DELETE FROM search_index", arguments: [])
-            try db.execute(sql: "DELETE FROM books_fts", arguments: [])
+            try db.execute(sql: "DELETE FROM search_index")
+            try db.execute(sql: "DELETE FROM books_fts")
             let books = try Book.fetchAll(db)
             for book in books {
                 let entry = SearchIndexEntry.from(title: book.title, authors: [], translators: [],
@@ -114,7 +114,7 @@ final class SearchRepository {
                         pinyin_title_full, pinyin_title_initials, pinyin_authors_full, pinyin_authors_initials,
                         combined_search_text, updated_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, arguments: args.map { $0 as any DatabaseValueConvertible })
+                    """, arguments: StatementArguments(args))
             }
         }
     }
@@ -131,7 +131,7 @@ final class SearchRepository {
                         pinyin_authors_full = ?, pinyin_authors_initials = ?,
                         updated_at = ?
                     WHERE book_id = ?
-                    """, arguments: [tp.full, tp.initials, ap.full, ap.initials, ISO8601(), book.id].map { $0 as any DatabaseValueConvertible })
+                    """, arguments: StatementArguments([tp.full, tp.initials, ap.full, ap.initials, ISO8601(), book.id]))
             }
         }
     }

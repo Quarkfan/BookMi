@@ -62,7 +62,7 @@ final class BackupService {
         guard let dbQueue else { throw BackupError.databaseNotInitialized }
 
         try await dbQueue.writeWithoutTransaction { (db: Database) in
-            try db.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)", arguments: [])
+            try db.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)")
         }
 
         let timestamp = ISO8601DateFormatter().string(from: Date())
@@ -89,7 +89,7 @@ final class BackupService {
         try JSONEncoder().encode(manifest).write(to: manifestURL)
 
         let zipURL = AppPaths.backupsURL.appendingPathComponent("library-backup-\(timestamp).zip")
-        try FileManager.default.zipItem(at: backupDir, destinationURL: zipURL)
+        try FileManager.default.zipItem(at: backupDir, to: zipURL)
         try FileManager.default.removeItem(at: backupDir)
 
         if location == .icloud {
@@ -121,7 +121,7 @@ final class BackupService {
         switch mode {
         case .overwrite:
             try await dbQueue.writeWithoutTransaction { (db: Database) in
-                try db.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)", arguments: [])
+                try db.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)")
             }
             let currentDB = AppPaths.libraryDataURL.appendingPathComponent("database.sqlite")
             try FileManager.default.removeItem(at: currentDB)
@@ -182,10 +182,10 @@ final class BackupService {
         let channels = try await dbQueue.read { (db: Database) in try PurchaseChannel.fetchAll(db) }
         try JSONEncoder().encode(channels).write(to: dir.appendingPathComponent("purchase_channels.json"))
 
-        let settings = try await dbQueue.read { (db: Database) in
-            try Row.fetchAll(db, sql: "SELECT * FROM settings", arguments: [])
+        let settings: [Row] = try await dbQueue.read { (db: Database) in
+            try Row.fetchAll(db, sql: "SELECT * FROM settings")
         }
-        let settingsMap = Dictionary(settings.map { ($0["key"] as String, $0["value"] as String?) }, uniquingKeysWith: { $1 })
+        let settingsMap = Dictionary<String, String?>(settings.map { ($0["key"] as String, $0["value"] as String?) }, uniquingKeysWith: { $1 })
         try JSONEncoder().encode(settingsMap).write(to: dir.appendingPathComponent("settings.json"))
     }
 
@@ -213,20 +213,20 @@ final class BackupService {
 
         try await dbQueue.writeWithoutTransaction { (db: Database) in
             try db.execute(sql: "ATTACH DATABASE ? AS backup", arguments: [dbFile.path])
-            defer { try? db.execute(sql: "DETACH DATABASE backup", arguments: []) }
+            defer { try? db.execute(sql: "DETACH DATABASE backup") }
 
-            try db.execute(sql: "INSERT INTO books SELECT * FROM backup.books WHERE id NOT IN (SELECT id FROM books)", arguments: [])
-            try db.execute(sql: "INSERT INTO shelves SELECT * FROM backup.shelves WHERE id NOT IN (SELECT id FROM shelves)", arguments: [])
-            try db.execute(sql: "INSERT INTO tags SELECT * FROM backup.tags WHERE id NOT IN (SELECT id FROM tags)", arguments: [])
-            try db.execute(sql: "INSERT INTO book_tags SELECT * FROM backup.book_tags WHERE (book_id, tag_id) NOT IN (SELECT book_id, tag_id FROM book_tags)", arguments: [])
-            try db.execute(sql: "INSERT INTO borrow_records SELECT * FROM backup.borrow_records WHERE id NOT IN (SELECT id FROM borrow_records)", arguments: [])
-            try db.execute(sql: "INSERT INTO purchase_channels SELECT * FROM backup.purchase_channels WHERE id NOT IN (SELECT id FROM purchase_channels)", arguments: [])
+            try db.execute(sql: "INSERT INTO books SELECT * FROM backup.books WHERE id NOT IN (SELECT id FROM books)")
+            try db.execute(sql: "INSERT INTO shelves SELECT * FROM backup.shelves WHERE id NOT IN (SELECT id FROM shelves)")
+            try db.execute(sql: "INSERT INTO tags SELECT * FROM backup.tags WHERE id NOT IN (SELECT id FROM tags)")
+            try db.execute(sql: "INSERT INTO book_tags SELECT * FROM backup.book_tags WHERE (book_id, tag_id) NOT IN (SELECT book_id, tag_id FROM book_tags)")
+            try db.execute(sql: "INSERT INTO borrow_records SELECT * FROM backup.borrow_records WHERE id NOT IN (SELECT id FROM borrow_records)")
+            try db.execute(sql: "INSERT INTO purchase_channels SELECT * FROM backup.purchase_channels WHERE id NOT IN (SELECT id FROM purchase_channels)")
 
             if mode == .merge {
                 try db.execute(sql: """
                     INSERT INTO settings SELECT * FROM backup.settings
                     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-                    """, arguments: [])
+                    """)
             }
         }
     }

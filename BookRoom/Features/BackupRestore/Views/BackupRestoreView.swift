@@ -24,7 +24,7 @@ struct BackupRestoreView: View {
                             ProgressView()
                         } else {
                             Image(systemName: "arrow.clockwise.circle.fill")
-                                .foregroundStyle(.accentColor)
+                                .foregroundStyle(.accent)
                         }
                         Text("创建备份")
                     }

@@ -237,7 +237,7 @@ struct SearchResultRow: View {
             Spacer()
 
             Image(systemName: "plus.circle.fill")
-                .foregroundStyle(.accentColor)
+                .foregroundStyle(.accent)
         }
     }
 }

@@ -161,7 +161,7 @@ struct DefaultChannelSettingView: View {
         .navigationTitle("默认购买渠道")
         .task {
             do {
-                channels = try await appContainer.dbQueue.read { (db: Database) in
+                channels = try await appContainer.databaseManager.dbQueue.read { (db: Database) in
                     try PurchaseChannel.fetchAll(db)
                 }
                 selectedID = appContainer.settings.defaultPurchaseChannelID
@@ -208,7 +208,7 @@ struct ChannelManagementView: View {
     private func loadChannels() {
         Task {
             do {
-                channels = try await appContainer.dbQueue.read { (db: Database) in
+                channels = try await appContainer.databaseManager.dbQueue.read { (db: Database) in
                     try PurchaseChannel.fetchAll(db)
                 }
             } catch {
@@ -222,7 +222,7 @@ struct ChannelManagementView: View {
             let channel = channels[index]
             Task {
                 do {
-                    try await appContainer.dbQueue.write { (db: Database) in
+                    try await appContainer.databaseManager.dbQueue.write { (db: Database) in
                         try db.execute(
                             sql: "UPDATE purchase_channels SET deleted_at = ?, updated_at = ? WHERE id = ?",
                             arguments: [ISO8601DateFormatter().string(from: Date()), ISO8601DateFormatter().string(from: Date()), channel.id])
@@ -272,11 +272,11 @@ struct ChannelEditView: View {
                             ch.updatedAt = now
                             do {
                                 if channel != nil {
-                                    try await appContainer.dbQueue.write { (db: Database) in
+                                    try await appContainer.databaseManager.dbQueue.write { (db: Database) in
                                         try ch.update(db)
                                     }
                                 } else {
-                                    try await appContainer.dbQueue.write { (db: Database) in
+                                    try await appContainer.databaseManager.dbQueue.write { (db: Database) in
                                         try ch.insert(db)
                                     }
                                 }

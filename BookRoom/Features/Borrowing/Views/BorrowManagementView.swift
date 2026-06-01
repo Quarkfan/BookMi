@@ -3,8 +3,8 @@ import GRDB
 
 /// Borrow management view for a single book
 struct BorrowManagementView: View {
+    private let dbQueue: DatabaseQueue
     let book: Book
-    @EnvironmentObject var appContainer: AppContainer
     @Environment(\.dismiss) private var dismiss
 
     @State private var borrowRecords: [BorrowRecord] = []
@@ -12,6 +12,11 @@ struct BorrowManagementView: View {
     @State private var borrowerName = ""
     @State private var contact = ""
     @State private var expectedReturnDate = ""
+
+    init(book: Book, dbQueue: DatabaseQueue) {
+        self.book = book
+        self.dbQueue = dbQueue
+    }
 
     var body: some View {
         NavigationView {
@@ -121,7 +126,7 @@ struct BorrowManagementView: View {
     @MainActor
     private func loadBorrowRecords() async {
         do {
-            borrowRecords = try await appContainer.dbQueue.read { (db: Database) in
+            borrowRecords = try await dbQueue.read { (db: Database) in
                 try BorrowRecord
                     .filter(Column("book_id") == book.id)
                     .order(Column("borrowed_at").desc)
@@ -148,18 +153,32 @@ struct BorrowManagementView: View {
             updatedAt: now
         )
 
+        let name = borrowerName
+        let cnt = contact
+        let exp = expectedReturnDate
+
         Task {
             do {
-                try await appContainer.dbQueue.write { (db: Database) in
-                    try record.insert(db)
+                try await dbQueue.write { (db: Database) in
+                    try db.execute(
+                        sql: """
+                        INSERT INTO borrow_records
+                        (id, book_id, borrower_name, contact, borrowed_at, expected_return_at, returned_at, status, note, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        arguments: [record.id, record.bookID, record.borrowerName, record.contact ?? "",
+                                    record.borrowedAt, record.expectedReturnAt ?? "", record.returnedAt ?? "",
+                                    record.status, record.note ?? "", record.createdAt, record.updatedAt])
                     try db.execute(
                         sql: "UPDATE books SET borrow_status = 'borrowed', updated_at = ? WHERE id = ?",
-                        arguments: [now, book.id])
+                        arguments: [record.borrowedAt, book.id])
+                }
+                await MainActor.run {
+                    borrowerName = ""
+                    contact = ""
+                    expectedReturnDate = ""
                 }
                 await loadBorrowRecords()
-                borrowerName = ""
-                contact = ""
-                expectedReturnDate = ""
             } catch {
                 print("Failed to create borrow record: \(error)")
             }
@@ -171,7 +190,8 @@ struct BorrowManagementView: View {
 
         Task {
             do {
-                try await appContainer.dbQueue.write { (db: Database) in
+                let now = ISO8601DateFormatter().string(from: Date())
+                try await dbQueue.write { (db: Database) in
                     try db.execute(
                         sql: """
                         UPDATE borrow_records
@@ -215,7 +235,7 @@ struct BorrowedBooksView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(borrowedBooks, id: \.id) { book in
-                    NavigationLink(destination: BorrowManagementView(book: book)) {
+                    NavigationLink(destination: BorrowManagementView(book: book, dbQueue: appContainer.databaseManager.dbQueue)) {
                         VStack(alignment: .leading) {
                             Text(book.title)
                                 .font(.headline)

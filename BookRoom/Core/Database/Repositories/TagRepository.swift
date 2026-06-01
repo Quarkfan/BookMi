@@ -126,7 +126,7 @@ final class TagRepository {
             var args: [any DatabaseValueConvertible] = bookIDs
             args.append(contentsOf: tagIDs)
             try db.execute(sql: "DELETE FROM book_tags WHERE book_id IN (\(ph1)) AND tag_id IN (\(ph2))",
-                arguments: args)
+                arguments: StatementArguments(args))
         }
     }
 }

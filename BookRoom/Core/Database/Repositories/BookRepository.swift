@@ -78,7 +78,7 @@ final class BookRepository {
             let sql = "UPDATE books SET deleted_at=?, updated_at=? WHERE id IN (\(ph))"
             var args: [any DatabaseValueConvertible] = [ISO8601(), ISO8601()]
             args.append(contentsOf: ids)
-            try db.execute(sql: sql, arguments: args)
+            try db.execute(sql: sql, arguments: StatementArguments(args))
         }
     }
 
@@ -92,7 +92,7 @@ final class BookRepository {
             let sql = "UPDATE books SET shelf_id=?, updated_at=? WHERE id IN (\(ph))"
             var args: [any DatabaseValueConvertible] = [shelfID as any DatabaseValueConvertible, ISO8601()]
             args.append(contentsOf: bookIDs)
-            try db.execute(sql: sql, arguments: args)
+            try db.execute(sql: sql, arguments: StatementArguments(args))
         }
     }
 
@@ -102,7 +102,7 @@ final class BookRepository {
             let sql = "UPDATE books SET reading_status=?, updated_at=? WHERE id IN (\(ph))"
             var args: [any DatabaseValueConvertible] = [status.rawValue, ISO8601()]
             args.append(contentsOf: bookIDs)
-            try db.execute(sql: sql, arguments: args)
+            try db.execute(sql: sql, arguments: StatementArguments(args))
         }
     }
 
@@ -112,7 +112,7 @@ final class BookRepository {
             let sql = "UPDATE books SET reading_status='finished', progress_percent=100, finished_at=?, updated_at=? WHERE id IN (\(ph))"
             var args: [any DatabaseValueConvertible] = [ISO8601(), ISO8601()]
             args.append(contentsOf: bookIDs)
-            try db.execute(sql: sql, arguments: args)
+            try db.execute(sql: sql, arguments: StatementArguments(args))
         }
     }
 

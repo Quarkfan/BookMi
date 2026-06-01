@@ -155,9 +155,6 @@ struct BookDetailView: View {
         .task {
             await loadRelatedData()
         }
-        .sheet(isPresented: $showEditForm) {
-            // TODO: Edit form
-        }
     }
 
     // MARK: - Cover Section
@@ -222,13 +219,13 @@ struct BookDetailView: View {
 
             // Load purchase channel
             if let channelID = book.purchaseChannelID {
-                purchaseChannel = try appContainer.dbQueue.read { db in
+                purchaseChannel = try await appContainer.dbQueue.read { db in
                     try PurchaseChannel.fetchOne(db, key: channelID)
                 }
             }
 
             // Load active borrow record
-            borrowRecord = try appContainer.dbQueue.read { db in
+            borrowRecord = try await appContainer.dbQueue.read { db in
                 try BorrowRecord
                     .filter(Column("book_id") == book.id)
                     .filter(Column("status") == "borrowed")
@@ -242,11 +239,13 @@ struct BookDetailView: View {
     // MARK: - Delete
 
     private func deleteBook() {
-        do {
-            try await appContainer.bookRepo.softDelete(id: book.id)
-            dismiss()
-        } catch {
-            print("Failed to delete book: \(error)")
+        Task {
+            do {
+                try await appContainer.bookRepo.softDelete(id: book.id)
+                dismiss()
+            } catch {
+                print("Failed to delete book: \(error)")
+            }
         }
     }
 

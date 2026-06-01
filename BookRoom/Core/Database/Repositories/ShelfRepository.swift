@@ -11,7 +11,7 @@ final class ShelfRepository {
 
     // MARK: - Fetch
 
-    func fetchAll() throws -> [Shelf] {
+    func fetchAll() async throws -> [Shelf] {
         try await dbQueue.read { db in
             try Shelf
                 .filter(Column("deleted_at") == nil)
@@ -20,13 +20,13 @@ final class ShelfRepository {
         }
     }
 
-    func fetch(byID id: String) throws -> Shelf? {
+    func fetch(byID id: String) async throws -> Shelf? {
         try await dbQueue.read { db in
             try Shelf.fetchOne(db, key: id)
         }
     }
 
-    func fetchBookCount(forShelfID shelfID: String) throws -> Int {
+    func fetchBookCount(forShelfID shelfID: String) async throws -> Int {
         try await dbQueue.read { db in
             try Book
                 .filter(Column("deleted_at") == nil)
@@ -35,7 +35,7 @@ final class ShelfRepository {
         }
     }
 
-    func fetchAllWithBookCounts() throws -> [(shelf: Shelf, bookCount: Int)] {
+    func fetchAllWithBookCounts() async throws -> [(shelf: Shelf, bookCount: Int)] {
         try await dbQueue.read { db in
             let shelves = try Shelf
                 .filter(Column("deleted_at") == nil)
@@ -55,7 +55,7 @@ final class ShelfRepository {
     // MARK: - Create/Update
 
     @discardableResult
-    func insert(_ shelf: Shelf) throws -> Shelf {
+    func insert(_ shelf: Shelf) async throws -> Shelf {
         try await dbQueue.write { db in
             var shelf = shelf
             try shelf.insert(db)
@@ -64,7 +64,7 @@ final class ShelfRepository {
     }
 
     @discardableResult
-    func update(_ shelf: Shelf) throws -> Shelf {
+    func update(_ shelf: Shelf) async throws -> Shelf {
         try await dbQueue.write { db in
             var shelf = shelf
             shelf.updatedAt = ISO8601()
@@ -76,7 +76,7 @@ final class ShelfRepository {
     // MARK: - Delete
 
     /// Delete a shelf, moving its books to unclassified (shelf_id = nil)
-    func deleteAndUnclassify(id: String) throws {
+    func deleteAndUnclassify(id: String) async throws {
         try await dbQueue.write { db in
             try db.execute(
                 sql: "UPDATE books SET shelf_id = NULL, updated_at = ? WHERE shelf_id = ?",
@@ -87,7 +87,7 @@ final class ShelfRepository {
         }
     }
 
-    func permanentDelete(id: String) throws {
+    func permanentDelete(id: String) async throws {
         try await dbQueue.write { db in
             try Shelf.deleteOne(db, key: id)
         }
@@ -95,7 +95,7 @@ final class ShelfRepository {
 
     // MARK: - Find by name
 
-    func fetch(byName name: String) throws -> Shelf? {
+    func fetch(byName name: String) async throws -> Shelf? {
         try await dbQueue.read { db in
             try Shelf
                 .filter(Column("deleted_at") == nil)

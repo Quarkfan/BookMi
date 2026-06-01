@@ -161,7 +161,7 @@ struct DefaultChannelSettingView: View {
         .navigationTitle("默认购买渠道")
         .task {
             do {
-                channels = try appContainer.dbQueue.read { db in
+                channels = try await appContainer.dbQueue.read { db in
                     try PurchaseChannel.fetchAll(db)
                 }
                 selectedID = appContainer.settings.defaultPurchaseChannelID
@@ -206,29 +206,33 @@ struct ChannelManagementView: View {
     }
 
     private func loadChannels() {
-        do {
-            channels = try appContainer.dbQueue.read { db in
-                try PurchaseChannel.fetchAll(db)
+        Task {
+            do {
+                channels = try await appContainer.dbQueue.read { db in
+                    try PurchaseChannel.fetchAll(db)
+                }
+            } catch {
+                print("Failed to load channels: \(error)")
             }
-        } catch {
-            print("Failed to load channels: \(error)")
         }
     }
 
     private func deleteChannel(at offsets: IndexSet) {
         for index in offsets {
             let channel = channels[index]
-            do {
-                try appContainer.dbQueue.write { db in
-                    try db.execute(
-                        sql: "UPDATE purchase_channels SET deleted_at = ?, updated_at = ? WHERE id = ?",
-                        arguments: [ISO8601DateFormatter().string(from: Date()), ISO8601DateFormatter().string(from: Date()), channel.id])
+            Task {
+                do {
+                    try await appContainer.dbQueue.write { db in
+                        try db.execute(
+                            sql: "UPDATE purchase_channels SET deleted_at = ?, updated_at = ? WHERE id = ?",
+                            arguments: [ISO8601DateFormatter().string(from: Date()), ISO8601DateFormatter().string(from: Date()), channel.id])
+                    }
+                    loadChannels()
+                } catch {
+                    print("Failed to delete channel: \(error)")
                 }
-            } catch {
-                print("Failed to delete channel: \(error)")
             }
         }
-        loadChannels()
     }
 }
 
@@ -259,25 +263,27 @@ struct ChannelEditView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("保存") {
-                        let now = ISO8601DateFormatter().string(from: Date())
-                        var ch = channel ?? PurchaseChannel(
-                            id: UUID().uuidString, name: name, sortOrder: 0,
-                            createdAt: now, updatedAt: now, deletedAt: nil)
-                        ch.name = name
-                        ch.updatedAt = now
-                        do {
-                            if channel != nil {
-                                try appContainer.dbQueue.write { db in
-                                    try ch.update(db)
+                        Task {
+                            let now = ISO8601DateFormatter().string(from: Date())
+                            var ch = channel ?? PurchaseChannel(
+                                id: UUID().uuidString, name: name, sortOrder: 0,
+                                createdAt: now, updatedAt: now, deletedAt: nil)
+                            ch.name = name
+                            ch.updatedAt = now
+                            do {
+                                if channel != nil {
+                                    try await appContainer.dbQueue.write { db in
+                                        try ch.update(db)
+                                    }
+                                } else {
+                                    try await appContainer.dbQueue.write { db in
+                                        try ch.insert(db)
+                                    }
                                 }
-                            } else {
-                                try appContainer.dbQueue.write { db in
-                                    try ch.insert(db)
-                                }
+                                await MainActor.run { onSave(ch) }
+                            } catch {
+                                print("Failed to save channel: \(error)")
                             }
-                            onSave(ch)
-                        } catch {
-                            print("Failed to save channel: \(error)")
                         }
                     }
                     .disabled(name.isEmpty)

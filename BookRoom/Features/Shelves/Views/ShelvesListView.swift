@@ -9,9 +9,8 @@ struct ShelvesListView: View {
     var body: some View {
         NavigationView {
             Group {
-                if isLoading {
-                    ProgressView("加载中...")
-                } else if shelves.isEmpty {
+                if isLoading { ProgressView("加载中...") }
+                else if shelves.isEmpty {
                     emptyState
                 } else {
                     List {
@@ -29,11 +28,7 @@ struct ShelvesListView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showAddShelf = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
+                    Button { showAddShelf = true } label: { Image(systemName: "plus") }
                 }
             }
             .task { await loadShelves() }
@@ -48,16 +43,9 @@ struct ShelvesListView: View {
 
     private var emptyState: some View {
         VStack(spacing: 16) {
-            Image(systemName: "shelf")
-                .font(.system(size: 64))
-                .foregroundStyle(.secondary)
-            Text("还没有书柜")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-            Button("创建第一个书柜") {
-                showAddShelf = true
-            }
-            .buttonStyle(.borderedProminent)
+            Image(systemName: "shelf").font(.system(size: 64)).foregroundStyle(.secondary)
+            Text("还没有书柜").font(.headline).foregroundStyle(.secondary)
+            Button("创建第一个书柜") { showAddShelf = true }.buttonStyle(.borderedProminent)
         }
     }
 
@@ -65,56 +53,41 @@ struct ShelvesListView: View {
     private func loadShelves() async {
         isLoading = true
         defer { isLoading = false }
-
-        do {
-            shelves = try await appContainer.shelfRepo.fetchAllWithBookCounts()
-        } catch {
-            print("Failed to load shelves: \(error)")
-        }
+        do { shelves = try await appContainer.shelfRepo.fetchAllWithBookCounts() }
+        catch { print("Failed: \(error)") }
     }
 
     private func deleteShelf(at offsets: IndexSet) {
         for index in offsets {
             let shelf = shelves[index].shelf
-            do {
-                try await appContainer.shelfRepo.deleteAndUnclassify(id: shelf.id)
-            } catch {
-                print("Failed to delete shelf: \(error)")
+            Task {
+                do {
+                    try await appContainer.shelfRepo.deleteAndUnclassify(id: shelf.id)
+                    await loadShelves()
+                } catch { print("Failed: \(error)") }
             }
         }
-        Task { await loadShelves() }
     }
 }
-
-// MARK: - Shelf Row
 
 struct ShelfRowView: View {
     let shelf: Shelf
     let bookCount: Int
-
     var body: some View {
         HStack {
-            Image(systemName: "books.vertical")
-                .foregroundStyle(.accentColor)
+            Image(systemName: "books.vertical").foregroundStyle(.accentColor)
             VStack(alignment: .leading) {
-                Text(shelf.name)
-                    .font(.headline)
+                Text(shelf.name).font(.headline)
                 if let note = shelf.locationNote, !note.isEmpty {
-                    Text(note)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text(note).font(.caption).foregroundStyle(.secondary)
                 }
             }
             Spacer()
-            Text("\(bookCount) 本")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            Text("\(bookCount) 本").font(.subheadline).foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
     }
 }
-
-// MARK: - Shelf Detail View
 
 struct ShelfDetailView: View {
     let shelf: Shelf
@@ -126,24 +99,15 @@ struct ShelfDetailView: View {
         ScrollView {
             if books.isEmpty {
                 VStack(spacing: 16) {
-                    Image(systemName: "books.vertical")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.secondary)
-                    Text("该书柜暂无图书")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.top, 100)
+                    Image(systemName: "books.vertical").font(.system(size: 48)).foregroundStyle(.secondary)
+                    Text("该书柜暂无图书").font(.headline).foregroundStyle(.secondary)
+                }.frame(maxWidth: .infinity).padding(.top, 100)
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 12)], spacing: 12) {
                     ForEach(books, id: \.id) { book in
-                        NavigationLink(destination: BookDetailView(book: book)) {
-                            BookCoverView(book: book)
-                        }
+                        NavigationLink(destination: BookDetailView(book: book)) { BookCoverView(book: book) }
                     }
-                }
-                .padding()
+                }.padding()
             }
         }
         .navigationTitle(shelf.name)
@@ -151,46 +115,34 @@ struct ShelfDetailView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu("操作") {
-                    Button { showEditSheet = true } label: {
-                        Label("编辑", systemImage: "pencil")
-                    }
-                    Button(role: .destructive) { deleteShelf() } label: {
-                        Label("删除", systemImage: "trash")
-                    }
+                    Button { showEditSheet = true } label: { Label("编辑", systemImage: "pencil") }
+                    Button(role: .destructive) { deleteShelf() } label: { Label("删除", systemImage: "trash") }
                 }
             }
         }
         .task {
-            do {
-                books = try await appContainer.bookRepo.fetch(byShelfID: shelf.id)
-            } catch {
-                print("Failed to load books: \(error)")
-            }
+            do { books = try await appContainer.bookRepo.fetch(byShelfID: shelf.id) }
+            catch { print("Failed: \(error)") }
         }
         .sheet(isPresented: $showEditSheet) {
-            ShelfEditView(shelf: shelf, onSave: { _ in
-                showEditSheet = false
-            })
+            ShelfEditView(shelf: shelf, onSave: { _ in showEditSheet = false })
         }
     }
 
     private func deleteShelf() {
-        do {
-            try await appContainer.shelfRepo.deleteAndUnclassify(id: shelf.id)
-        } catch {
-            print("Failed to delete shelf: \(error)")
+        Task {
+            do {
+                try await appContainer.shelfRepo.deleteAndUnclassify(id: shelf.id)
+            } catch { print("Failed: \(error)") }
         }
     }
 }
-
-// MARK: - Shelf Edit View
 
 struct ShelfEditView: View {
     let shelf: Shelf?
     let onSave: (Shelf) -> Void
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var appContainer: AppContainer
-
     @State private var name = ""
     @State private var locationNote = ""
     @State private var note = ""
@@ -207,21 +159,15 @@ struct ShelfEditView: View {
                 Section("基本信息") {
                     TextField("书柜名称 *", text: $name)
                     TextField("位置说明", text: $locationNote)
-                    TextField("备注", text: $note, axis: .vertical)
-                        .lineLimit(3...6)
+                    TextField("备注", text: $note, axis: .vertical).lineLimit(3...6)
                 }
             }
             .navigationTitle(shelf == nil ? "新书柜" : "编辑书柜")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("取消") { dismiss() }
-                }
+                ToolbarItem(placement: .navigationBarLeading) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(isSaving ? "保存中..." : "保存") {
-                        saveShelf()
-                    }
-                    .disabled(name.isEmpty || isSaving)
+                    Button(isSaving ? "保存中..." : "保存") { saveShelf() }.disabled(name.isEmpty || isSaving)
                 }
             }
             .onAppear {
@@ -236,39 +182,22 @@ struct ShelfEditView: View {
 
     private func saveShelf() {
         isSaving = true
-
         let now = ISO8601DateFormatter().string(from: Date())
-        var shelfItem = shelf ?? Shelf(
-            id: UUID().uuidString,
-            name: name,
-            locationNote: locationNote.nilIfEmpty,
-            sortOrder: 0,
-            note: note.nilIfEmpty,
-            createdAt: now,
-            updatedAt: now,
-            deletedAt: nil
-        )
-
-        shelfItem.name = name
-        shelfItem.locationNote = locationNote.nilIfEmpty
-        shelfItem.note = note.nilIfEmpty
-        shelfItem.updatedAt = now
-
-        do {
-            if shelf != nil {
-                shelfItem = try await appContainer.shelfRepo.update(shelfItem)
-            } else {
-                shelfItem = try await appContainer.shelfRepo.insert(shelfItem)
-            }
-            onSave(shelfItem)
-        } catch {
-            print("Failed to save shelf: \(error)")
+        var s = shelf ?? Shelf(id: UUID().uuidString, name: name, locationNote: locationNote.nilIfEmpty, sortOrder: 0, note: note.nilIfEmpty, createdAt: now, updatedAt: now, deletedAt: nil)
+        s.name = name
+        s.locationNote = locationNote.nilIfEmpty
+        s.note = note.nilIfEmpty
+        s.updatedAt = now
+        Task {
+            do {
+                if shelf != nil { s = try await appContainer.shelfRepo.update(s) }
+                else { s = try await appContainer.shelfRepo.insert(s) }
+                await MainActor.run { onSave(s); isSaving = false }
+            } catch { await MainActor.run { print("Failed: \(error)"); isSaving = false } }
         }
-        isSaving = false
     }
 }
 
 #Preview {
-    ShelvesListView()
-        .environmentObject(AppContainer.shared)
+    ShelvesListView().environmentObject(AppContainer.shared)
 }

@@ -249,7 +249,7 @@ struct ChannelSelectionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             do {
-                channels = try appContainer.dbQueue.read { db in
+                channels = try await appContainer.dbQueue.read { db in
                     try PurchaseChannel.fetchAll(db)
                 }
             } catch {

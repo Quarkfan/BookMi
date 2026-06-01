@@ -121,7 +121,7 @@ struct BorrowManagementView: View {
     @MainActor
     private func loadBorrowRecords() async {
         do {
-            borrowRecords = try appContainer.dbQueue.read { db in
+            borrowRecords = try await appContainer.dbQueue.read { db in
                 try BorrowRecord
                     .filter(Column("book_id") == book.id)
                     .order(Column("borrowed_at").desc)

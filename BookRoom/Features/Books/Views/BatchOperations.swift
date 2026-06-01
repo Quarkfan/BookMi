@@ -1,11 +1,9 @@
 import SwiftUI
 
-/// Batch operation action sheet
 struct BatchActionSheet: View {
     let selectedBookIDs: [String]
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var appContainer: AppContainer
-
     @State private var showShelfPicker = false
     @State private var showTagPicker = false
     @State private var showStatusPicker = false
@@ -15,36 +13,16 @@ struct BatchActionSheet: View {
         NavigationView {
             List {
                 Section("批量操作 (\(selectedBookIDs.count) 本)") {
-                    Button { showShelfPicker = true } label: {
-                        Label("移动书柜", systemImage: "shelf")
-                    }
-
-                    Button { showTagPicker = true } label: {
-                        Label("添加标签", systemImage: "tag")
-                    }
-
-                    Button { showStatusPicker = true } label: {
-                        Label("设置阅读状态", systemImage: "book")
-                    }
-
-                    Button { markFinished() } label: {
-                        Label("标记读完", systemImage: "checkmark.circle")
-                    }
-
-                    Button(role: .destructive) {
-                        deleteBooks()
-                    } label: {
-                        Label("删除图书", systemImage: "trash")
-                    }
+                    Button { showShelfPicker = true } label: { Label("移动书柜", systemImage: "shelf") }
+                    Button { showTagPicker = true } label: { Label("添加标签", systemImage: "tag") }
+                    Button { showStatusPicker = true } label: { Label("设置阅读状态", systemImage: "book") }
+                    Button { markFinished() } label: { Label("标记读完", systemImage: "checkmark.circle") }
+                    Button(role: .destructive) { deleteBooks() } label: { Label("删除图书", systemImage: "trash") }
                 }
             }
             .navigationTitle("批量操作")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("关闭") { dismiss() }
-                }
-            }
+            .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("关闭") { dismiss() } } }
             .sheet(isPresented: $showShelfPicker) {
                 BatchShelfPicker(bookIDs: selectedBookIDs, onComplete: { dismiss() })
             }
@@ -70,13 +48,8 @@ struct BatchActionSheet: View {
         Task {
             do {
                 try await appContainer.bookRepo.batchMarkFinished(bookIDs: selectedBookIDs)
-            } catch {
-                print("Failed to batch mark finished: \(error)")
-            }
-            await MainActor.run {
-                isProcessing = false
-                dismiss()
-            }
+            } catch { print("Failed: \(error)") }
+            await MainActor.run { isProcessing = false; dismiss() }
         }
     }
 
@@ -85,18 +58,11 @@ struct BatchActionSheet: View {
         Task {
             do {
                 try await appContainer.bookRepo.softDelete(ids: selectedBookIDs)
-            } catch {
-                print("Failed to batch delete: \(error)")
-            }
-            await MainActor.run {
-                isProcessing = false
-                dismiss()
-            }
+            } catch { print("Failed: \(error)") }
+            await MainActor.run { isProcessing = false; dismiss() }
         }
     }
 }
-
-// MARK: - Batch Shelf Picker
 
 struct BatchShelfPicker: View {
     let bookIDs: [String]
@@ -111,27 +77,14 @@ struct BatchShelfPicker: View {
                 if isProcessing {
                     ProgressView()
                 } else {
-                    Button("取消书柜关联") {
-                        moveShelf(to: nil)
-                    }
-                    .foregroundColor(.accentColor)
-
+                    Button("取消书柜关联") { moveShelf(to: nil) }.foregroundColor(.accentColor)
                     ForEach(shelves, id: \.id) { shelf in
-                        Button(shelf.name) {
-                            moveShelf(to: shelf.id)
-                        }
+                        Button(shelf.name) { moveShelf(to: shelf.id) }
                     }
                 }
             }
             .navigationTitle("选择书柜")
-            .navigationBarTitleDisplayMode(.inline)
-            .task {
-                do {
-                    shelves = try await appContainer.shelfRepo.fetchAll()
-                } catch {
-                    print("Failed to load shelves: \(error)")
-                }
-            }
+            .task { do { shelves = try await appContainer.shelfRepo.fetchAll() } catch { print("Failed: \(error)") } }
         }
     }
 
@@ -140,18 +93,11 @@ struct BatchShelfPicker: View {
         Task {
             do {
                 try await appContainer.bookRepo.batchUpdateShelf(bookIDs: bookIDs, shelfID: shelfID)
-            } catch {
-                print("Failed to batch move shelf: \(error)")
-            }
-            await MainActor.run {
-                isProcessing = false
-                onComplete()
-            }
+            } catch { print("Failed: \(error)") }
+            await MainActor.run { isProcessing = false; onComplete() }
         }
     }
 }
-
-// MARK: - Batch Tag Picker
 
 struct BatchTagPicker: View {
     let bookIDs: [String]
@@ -163,25 +109,15 @@ struct BatchTagPicker: View {
     var body: some View {
         NavigationView {
             List {
-                if isProcessing {
-                    ProgressView()
-                } else {
+                if isProcessing { ProgressView() }
+                else {
                     ForEach(tags, id: \.id) { tag in
-                        Button(tag.name) {
-                            addTag(tag.id)
-                        }
+                        Button(tag.name) { addTag(tag.id) }
                     }
                 }
             }
             .navigationTitle("添加标签")
-            .navigationBarTitleDisplayMode(.inline)
-            .task {
-                do {
-                    tags = try await appContainer.tagRepo.fetchAll()
-                } catch {
-                    print("Failed to load tags: \(error)")
-                }
-            }
+            .task { do { tags = try await appContainer.tagRepo.fetchAll() } catch { print("Failed: \(error)") } }
         }
     }
 
@@ -190,18 +126,11 @@ struct BatchTagPicker: View {
         Task {
             do {
                 try await appContainer.tagRepo.addTags(tagIDs: [tagID], toBooks: bookIDs)
-            } catch {
-                print("Failed to batch add tags: \(error)")
-            }
-            await MainActor.run {
-                isProcessing = false
-                onComplete()
-            }
+            } catch { print("Failed: \(error)") }
+            await MainActor.run { isProcessing = false; onComplete() }
         }
     }
 }
-
-// MARK: - Batch Status Picker
 
 struct BatchStatusPicker: View {
     let bookIDs: [String]
@@ -212,18 +141,14 @@ struct BatchStatusPicker: View {
     var body: some View {
         NavigationView {
             List {
-                if isProcessing {
-                    ProgressView()
-                } else {
+                if isProcessing { ProgressView() }
+                else {
                     ForEach(ReadingStatus.allCases, id: \.self) { status in
-                        Button(status.displayName) {
-                            setStatus(to: status)
-                        }
+                        Button(status.displayName) { setStatus(to: status) }
                     }
                 }
             }
             .navigationTitle("设置阅读状态")
-            .navigationBarTitleDisplayMode(.inline)
         }
     }
 
@@ -232,13 +157,12 @@ struct BatchStatusPicker: View {
         Task {
             do {
                 try await appContainer.bookRepo.batchUpdateReadingStatus(bookIDs: bookIDs, status: status)
-            } catch {
-                print("Failed to batch update status: \(error)")
-            }
-            await MainActor.run {
-                isProcessing = false
-                onComplete()
-            }
+            } catch { print("Failed: \(error)") }
+            await MainActor.run { isProcessing = false; onComplete() }
         }
     }
+}
+
+#Preview {
+    BatchActionSheet(selectedBookIDs: []).environmentObject(AppContainer.shared)
 }

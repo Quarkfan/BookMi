@@ -29,7 +29,7 @@ struct BorrowRecord: Codable, FetchableRecord, MutablePersistableRecord {
     }
 
     mutating func didInsert(_ inserted: InsertionSuccess) {
-        id = inserted.rowID.value as? String ?? id
+        id = inserted.rowID as? String ?? id
     }
 }
 
@@ -51,6 +51,6 @@ struct PurchaseChannel: Codable, FetchableRecord, MutablePersistableRecord {
     }
 
     mutating func didInsert(_ inserted: InsertionSuccess) {
-        id = inserted.rowID.value as? String ?? id
+        id = inserted.rowID as? String ?? id
     }
 }

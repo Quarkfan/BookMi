@@ -119,42 +119,42 @@ final class BookRepository {
     func countByYear() async throws -> [(year: String, count: Int)] {
         try await dbQueue.read { (db: Database) in
             try Row.fetchAll(db, sql: "SELECT strftime('%Y', created_at) as year, COUNT(*) as count FROM books WHERE deleted_at IS NULL GROUP BY year ORDER BY year DESC")
-                .map { ($0["year"] as String, $0["count"] as Int) }
+                .map { (row: Row) in (row["year"] as String, row["count"] as Int) }
         }
     }
 
     func countByShelf() async throws -> [(shelfID: String?, shelfName: String?, count: Int)] {
         try await dbQueue.read { (db: Database) in
             try Row.fetchAll(db, sql: "SELECT b.shelf_id, s.name as shelf_name, COUNT(*) as count FROM books b LEFT JOIN shelves s ON b.shelf_id = s.id WHERE b.deleted_at IS NULL GROUP BY b.shelf_id ORDER BY count DESC")
-                .map { ($0["shelf_id"] as String?, $0["shelf_name"] as String?, $0["count"] as Int) }
+                .map { (row: Row) in (row["shelf_id"] as String?, row["shelf_name"] as String?, row["count"] as Int) }
         }
     }
 
     func countByReadingStatus() async throws -> [(status: String, count: Int)] {
         try await dbQueue.read { (db: Database) in
             try Row.fetchAll(db, sql: "SELECT reading_status as status, COUNT(*) as count FROM books WHERE deleted_at IS NULL GROUP BY reading_status")
-                .map { ($0["status"] as String, $0["count"] as Int) }
+                .map { (row: Row) in (row["status"] as String, row["count"] as Int) }
         }
     }
 
     func countDuplicatesByISBN() async throws -> [(isbn: String, count: Int)] {
         try await dbQueue.read { (db: Database) in
             try Row.fetchAll(db, sql: "SELECT COALESCE(isbn13, isbn10) as isbn, COUNT(*) as count FROM books WHERE deleted_at IS NULL AND (isbn10 IS NOT NULL OR isbn13 IS NOT NULL) GROUP BY COALESCE(isbn13, isbn10) HAVING count > 1 ORDER BY count DESC")
-                .map { ($0["isbn"] as String, $0["count"] as Int) }
+                .map { (row: Row) in (row["isbn"] as String, row["count"] as Int) }
         }
     }
 
     func countByPublisher() async throws -> [(name: String, count: Int)] {
         try await dbQueue.read { (db: Database) in
             try Row.fetchAll(db, sql: "SELECT publisher as name, COUNT(*) as count FROM books WHERE deleted_at IS NULL AND publisher IS NOT NULL GROUP BY publisher ORDER BY count DESC LIMIT 20")
-                .map { ($0["name"] as String, $0["count"] as Int) }
+                .map { (row: Row) in (row["name"] as String, row["count"] as Int) }
         }
     }
 
     func countByPurchaseChannel() async throws -> [(name: String?, count: Int)] {
         try await dbQueue.read { (db: Database) in
             try Row.fetchAll(db, sql: "SELECT pc.name as name, COUNT(*) as count FROM books b LEFT JOIN purchase_channels pc ON b.purchase_channel_id = pc.id WHERE b.deleted_at IS NULL GROUP BY b.purchase_channel_id ORDER BY count DESC")
-                .map { ($0["name"] as String?, $0["count"] as Int) }
+                .map { (row: Row) in (row["name"] as String?, row["count"] as Int) }
         }
     }
 

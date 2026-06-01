@@ -75,7 +75,7 @@ struct ShelfRowView: View {
     let bookCount: Int
     var body: some View {
         HStack {
-            Image(systemName: "books.vertical").foregroundStyle(.accent)
+            Image(systemName: "books.vertical").foregroundColor(.accentColor)
             VStack(alignment: .leading) {
                 Text(shelf.name).font(.headline)
                 if let note = shelf.locationNote, !note.isEmpty {

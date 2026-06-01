@@ -291,7 +291,7 @@ struct CSVExportView: View {
                                 Spacer()
                                 if selectedFields.contains(field) {
                                     Image(systemName: "checkmark")
-                                        .foregroundStyle(.accent)
+                                        .foregroundColor(.accentColor)
                                 }
                             }
                         }

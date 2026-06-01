@@ -93,7 +93,7 @@ struct BooksListView: View {
                             Button { toggleSelect(book.id) } label: {
                                 HStack {
                                     Image(systemName: selectedBooks.contains(book.id) ? "checkmark.circle.fill" : "circle")
-                                        .foregroundStyle(selectedBooks.contains(book.id) ? .accent : .secondary)
+                                        .foregroundColor(selectedBooks.contains(book.id) ? .accentColor : .secondary)
                                     BookRowView(book: book)
                                 }
                             }
@@ -112,7 +112,7 @@ struct BooksListView: View {
                                     ZStack(alignment: .topTrailing) {
                                         BookCoverView(book: book)
                                         Image(systemName: selectedBooks.contains(book.id) ? "checkmark.circle.fill" : "circle")
-                                            .foregroundStyle(selectedBooks.contains(book.id) ? .accent : .white)
+                                            .foregroundColor(selectedBooks.contains(book.id) ? .accentColor : .white)
                                             .padding(4)
                                     }
                                 }

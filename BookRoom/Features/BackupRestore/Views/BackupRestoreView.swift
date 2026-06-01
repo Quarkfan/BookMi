@@ -123,7 +123,7 @@ struct BackupRestoreView: View {
         }
     }
 
-    private func restoreBackup(_ backup: BackupInfo, mode: BackupService.RestoreMode) {
+    private func restoreBackup(_ backup: BackupInfo, mode: RestoreMode) {
         Task {
             do {
                 try await BackupService.restore(from: backup.url, mode: mode)
@@ -150,7 +150,7 @@ struct BackupRestoreView: View {
         }
     }
 
-    private func modeName(_ mode: BackupService.RestoreMode) -> String {
+    private func modeName(_ mode: RestoreMode) -> String {
         switch mode {
         case .overwrite: return "覆盖"
         case .merge: return "合并"
@@ -163,7 +163,7 @@ struct BackupRestoreView: View {
 
 struct RestoreModeSheet: View {
     let backup: BackupInfo
-    let onComplete: (BackupService.RestoreMode) -> Void
+    let onComplete: (RestoreMode) -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {

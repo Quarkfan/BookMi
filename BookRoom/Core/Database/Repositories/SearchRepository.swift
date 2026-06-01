@@ -13,7 +13,7 @@ final class SearchRepository {
 
         return try await dbQueue.read { (db: Database) in
             let ftsSQL = "SELECT fts.book_id FROM books_fts fts WHERE books_fts MATCH ? LIMIT ?"
-            let ftsResults = try Row.fetchAll(db, sql: ftsSQL, arguments: StatementArguments([term, limit]))
+            let ftsResults = try Row.fetchAll(db, sql: ftsSQL, arguments: StatementArguments([term.databaseValue, limit.databaseValue]))
             let ftsIDs = Set(ftsResults.map { (row: Row) in row["book_id"] as String })
 
             let pinyinSQL = """
@@ -22,7 +22,8 @@ final class SearchRepository {
                 OR pinyin_authors_full LIKE ? OR pinyin_authors_initials LIKE ?
                 LIMIT ?
                 """
-            let pinyinResults = try Row.fetchAll(db, sql: pinyinSQL, arguments: StatementArguments(["%\(pe.full)%", "%\(pe.initials)%", "%\(pe.full)%", "%\(pe.initials)%", limit]))
+            let pinyinResults = try Row.fetchAll(db, sql: pinyinSQL, arguments: StatementArguments(
+                ["%\(pe.full)%", "%\(pe.initials)%", "%\(pe.full)%", "%\(pe.initials)%"].map { $0.databaseValue } + [limit.databaseValue]))
             let pinyinIDs = Set(pinyinResults.map { (row: Row) in row["book_id"] as String })
 
             let allIDs = Array(ftsIDs.union(pinyinIDs))
@@ -131,7 +132,7 @@ final class SearchRepository {
                         pinyin_authors_full = ?, pinyin_authors_initials = ?,
                         updated_at = ?
                     WHERE book_id = ?
-                    """, arguments: StatementArguments([tp.full, tp.initials, ap.full, ap.initials, ISO8601(), book.id]))
+                    """, arguments: StatementArguments([tp.full, tp.initials, ap.full, ap.initials, ISO8601(), book.id].map { $0.databaseValue }))
             }
         }
     }
@@ -142,13 +143,24 @@ private func parseJSON(_ json: String?) -> [String] {
     return arr
 }
 
-private func indexArgs(_ entry: SearchIndexEntry) -> [any DatabaseValueConvertible] {
+private func indexArgs(_ entry: SearchIndexEntry) -> [DatabaseValue] {
     [
-        entry.bookID, entry.normalizedTitle, entry.normalizedAuthors, entry.normalizedTranslators,
-        entry.normalizedPublisher, entry.normalizedISBN, entry.normalizedTags, entry.normalizedShelf,
-        entry.normalizedLocation, entry.normalizedPurchaseChannel,
-        entry.pinyinTitleFull, entry.pinyinTitleInitials, entry.pinyinAuthorsFull, entry.pinyinAuthorsInitials,
-        entry.combinedSearchText, ISO8601()
+        entry.bookID.databaseValue,
+        entry.normalizedTitle.databaseValue,
+        entry.normalizedAuthors.databaseValue,
+        entry.normalizedTranslators.databaseValue,
+        entry.normalizedPublisher.databaseValue,
+        entry.normalizedISBN.databaseValue,
+        entry.normalizedTags.databaseValue,
+        entry.normalizedShelf.databaseValue,
+        entry.normalizedLocation.databaseValue,
+        entry.normalizedPurchaseChannel.databaseValue,
+        entry.pinyinTitleFull.databaseValue,
+        entry.pinyinTitleInitials.databaseValue,
+        entry.pinyinAuthorsFull.databaseValue,
+        entry.pinyinAuthorsInitials.databaseValue,
+        entry.combinedSearchText.databaseValue,
+        ISO8601().databaseValue
     ]
 }
 

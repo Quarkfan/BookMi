@@ -11,7 +11,7 @@ final class SearchRepository {
         let pe = Pinyin.analyze(trimmed)
         let term = trimmed.replacingOccurrences(of: "\"", with: "\"\"")
 
-        return try await dbQueue.read { db in
+        return try await dbQueue.read { (db: Database) in
             let ftsSQL = "SELECT fts.book_id FROM books_fts fts WHERE books_fts MATCH ? LIMIT ?"
             let ftsResults = try Row.fetchAll(db, sql: ftsSQL, arguments: [term, limit])
             let ftsIDs = Set(ftsResults.map { $0["book_id"] as String })
@@ -40,7 +40,7 @@ final class SearchRepository {
         let pe = Pinyin.analyze(trimmed)
         let kw = trimmed.lowercased()
 
-        return try await dbQueue.read { db in
+        return try await dbQueue.read { (db: Database) in
             let sql = """
                 SELECT DISTINCT b.* FROM books b
                 LEFT JOIN search_index si ON b.id = si.book_id
@@ -67,7 +67,7 @@ final class SearchRepository {
             isbn: book.isbn13 ?? book.isbn10, tags: [], shelf: nil,
             location: book.locationDetail, purchaseChannel: nil, bookID: book.id)
 
-        try await dbQueue.writeWithoutTransaction { db in
+        try await dbQueue.writeWithoutTransaction { (db: Database) in
             let sql = """
                 INSERT INTO search_index (book_id, normalized_title, normalized_authors, normalized_translators,
                     normalized_publisher, normalized_isbn, normalized_tags, normalized_shelf,
@@ -98,7 +98,7 @@ final class SearchRepository {
     }
 
     func rebuildIndex() async throws {
-        try await dbQueue.writeWithoutTransaction { db in
+        try await dbQueue.writeWithoutTransaction { (db: Database) in
             try db.execute(sql: "DELETE FROM search_index", arguments: [])
             try db.execute(sql: "DELETE FROM books_fts", arguments: [])
             let books = try Book.fetchAll(db)
@@ -120,7 +120,7 @@ final class SearchRepository {
     }
 
     func rebuildPinyinIndex() async throws {
-        try await dbQueue.writeWithoutTransaction { db in
+        try await dbQueue.writeWithoutTransaction { (db: Database) in
             let books = try Book.fetchAll(db)
             for book in books {
                 let tp = Pinyin.analyze(book.title)

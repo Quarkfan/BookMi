@@ -90,7 +90,7 @@ final class CSVService {
             }
 
             // Check duplicates
-            let existing = try checkDuplicate(
+            let existing = try await checkDuplicate(
                 draft: draft,
                 strategy: duplicateStrategy,
                 bookRepo: bookRepo
@@ -136,7 +136,7 @@ final class CSVService {
         draft: BookMetadataDraft,
         strategy: DuplicateStrategy,
         bookRepo: BookRepository
-    ) throws -> DuplicateAction {
+    ) async throws -> DuplicateAction {
         let isbn = draft.isbn13 ?? draft.isbn10
         guard let isbn else {
             // No ISBN, check by title + author

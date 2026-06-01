@@ -61,7 +61,7 @@ final class BackupService {
         let dbQueue = AppContainer.shared.databaseManager.dbQueue
         guard let dbQueue else { throw BackupError.databaseNotInitialized }
 
-        try await dbQueue.writeWithoutTransaction { db in
+        try await dbQueue.writeWithoutTransaction { (db: Database) in
             try db.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)", arguments: [])
         }
 
@@ -120,7 +120,7 @@ final class BackupService {
 
         switch mode {
         case .overwrite:
-            try await dbQueue.writeWithoutTransaction { db in
+            try await dbQueue.writeWithoutTransaction { (db: Database) in
                 try db.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)", arguments: [])
             }
             let currentDB = AppPaths.libraryDataURL.appendingPathComponent("database.sqlite")
@@ -164,25 +164,25 @@ final class BackupService {
         let dbQueue = AppContainer.shared.databaseManager.dbQueue
         guard let dbQueue else { return }
 
-        let books = try await dbQueue.read { db in try Book.fetchAll(db) }
+        let books = try await dbQueue.read { (db: Database) in try Book.fetchAll(db) }
         try JSONEncoder().encode(books).write(to: dir.appendingPathComponent("books.json"))
 
-        let shelves = try await dbQueue.read { db in try Shelf.fetchAll(db) }
+        let shelves = try await dbQueue.read { (db: Database) in try Shelf.fetchAll(db) }
         try JSONEncoder().encode(shelves).write(to: dir.appendingPathComponent("shelves.json"))
 
-        let tags = try await dbQueue.read { db in try Tag.fetchAll(db) }
+        let tags = try await dbQueue.read { (db: Database) in try Tag.fetchAll(db) }
         try JSONEncoder().encode(tags).write(to: dir.appendingPathComponent("tags.json"))
 
-        let bookTags = try await dbQueue.read { db in try BookTag.fetchAll(db) }
+        let bookTags = try await dbQueue.read { (db: Database) in try BookTag.fetchAll(db) }
         try JSONEncoder().encode(bookTags).write(to: dir.appendingPathComponent("book_tags.json"))
 
-        let borrows = try await dbQueue.read { db in try BorrowRecord.fetchAll(db) }
+        let borrows = try await dbQueue.read { (db: Database) in try BorrowRecord.fetchAll(db) }
         try JSONEncoder().encode(borrows).write(to: dir.appendingPathComponent("borrow_records.json"))
 
-        let channels = try await dbQueue.read { db in try PurchaseChannel.fetchAll(db) }
+        let channels = try await dbQueue.read { (db: Database) in try PurchaseChannel.fetchAll(db) }
         try JSONEncoder().encode(channels).write(to: dir.appendingPathComponent("purchase_channels.json"))
 
-        let settings = try await dbQueue.read { db in
+        let settings = try await dbQueue.read { (db: Database) in
             try Row.fetchAll(db, sql: "SELECT * FROM settings", arguments: [])
         }
         let settingsMap = Dictionary(settings.map { ($0["key"] as String, $0["value"] as String?) }, uniquingKeysWith: { $1 })
@@ -196,9 +196,9 @@ final class BackupService {
         } else { coverCount = 0 }
 
         let dbQueue = AppContainer.shared.databaseManager.dbQueue
-        let bookCount = try await (dbQueue?.read { db in try Book.fetchCount(db) }) ?? 0
-        let shelfCount = try await (dbQueue?.read { db in try Shelf.fetchCount(db) }) ?? 0
-        let tagCount = try await (dbQueue?.read { db in try Tag.fetchCount(db) }) ?? 0
+        let bookCount = try await (dbQueue?.read { (db: Database) in try Book.fetchCount(db) }) ?? 0
+        let shelfCount = try await (dbQueue?.read { (db: Database) in try Shelf.fetchCount(db) }) ?? 0
+        let tagCount = try await (dbQueue?.read { (db: Database) in try Tag.fetchCount(db) }) ?? 0
 
         return BackupManifest(
             appName: "BookRoom", backupVersion: 1, createdAt: ISO8601DateFormatter().string(from: Date()),
@@ -211,7 +211,7 @@ final class BackupService {
         let dbQueue = AppContainer.shared.databaseManager.dbQueue
         guard let dbQueue else { return }
 
-        try await dbQueue.writeWithoutTransaction { db in
+        try await dbQueue.writeWithoutTransaction { (db: Database) in
             try db.execute(sql: "ATTACH DATABASE ? AS backup", arguments: [dbFile.path])
             defer { try? db.execute(sql: "DETACH DATABASE backup", arguments: []) }
 

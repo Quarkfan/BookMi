@@ -88,6 +88,8 @@ struct CSVImportView: View {
     @State private var previewRows: [[String]] = []
     @State private var duplicateStrategy: DuplicateStrategy = .skip
     @State private var isImporting = false
+    @State private var showError = false
+    @State private var errorMessage = ""
 
     let availableFields: [(field: CSVField, defaultHeader: String)] = [
         (.title, "书名"),
@@ -170,6 +172,11 @@ struct CSVImportView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("取消") { dismiss() }
                 }
+            }
+            .alert("错误", isPresented: $showError) {
+                Button("确定", role: .cancel) {}
+            } message: {
+                Text(errorMessage)
             }
         }
     }

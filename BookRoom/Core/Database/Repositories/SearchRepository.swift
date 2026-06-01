@@ -9,29 +9,28 @@ final class SearchRepository {
         let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
         let pe = Pinyin.analyze(trimmed)
+        let term = trimmed.replacingOccurrences(of: "\"", with: "\"\"")
 
         return try await dbQueue.read { db in
-            let ftsResults = try Row.fetchAll(db, sql: """
-                SELECT fts.book_id FROM books_fts fts WHERE books_fts MATCH ? LIMIT ?
-            """, arguments: [trimmed.replacingOccurrences(of: "\"", with: "\"\""), limit])
-
+            let ftsSQL = "SELECT fts.book_id FROM books_fts fts WHERE books_fts MATCH ? LIMIT ?"
+            let ftsResults = try Row.fetchAll(db, sql: ftsSQL, arguments: [term, limit])
             let ftsIDs = Set(ftsResults.map { $0["book_id"] as String })
 
-            let pinyinResults = try Row.fetchAll(db, sql: """
+            let pinyinSQL = """
                 SELECT book_id FROM search_index
                 WHERE pinyin_title_full LIKE ? OR pinyin_title_initials LIKE ?
-                   OR pinyin_authors_full LIKE ? OR pinyin_authors_initials LIKE ?
+                OR pinyin_authors_full LIKE ? OR pinyin_authors_initials LIKE ?
                 LIMIT ?
-            """, arguments: ["%\(pe.full)%", "%\(pe.initials)%", "%\(pe.full)%", "%\(pe.initials)%", limit])
-
+                """
+            let pinyinResults = try Row.fetchAll(db, sql: pinyinSQL, arguments: ["%\(pe.full)%", "%\(pe.initials)%", "%\(pe.full)%", "%\(pe.initials)%", limit])
             let pinyinIDs = Set(pinyinResults.map { $0["book_id"] as String })
+
             let allIDs = Array(ftsIDs.union(pinyinIDs))
             guard !allIDs.isEmpty else { return [] }
 
-            let ph = allIDs.map { _ in "?" }.joined(separator: ",")
-            return try Book.fetchAll(db, sql: """
-                SELECT * FROM books WHERE id IN (\(ph)) AND deleted_at IS NULL
-            """, arguments: allIDs.map { .string($0) })
+            let ph = allIDs.map { "?" }.joined(separator: ",")
+            let sql = "SELECT * FROM books WHERE id IN (\(ph)) AND deleted_at IS NULL"
+            return try Book.fetchAll(db, sql: sql, arguments: allIDs.map { $0 as any DatabaseValueConvertible })
         }
     }
 
@@ -42,7 +41,7 @@ final class SearchRepository {
         let kw = trimmed.lowercased()
 
         return try await dbQueue.read { db in
-            try Book.fetchAll(db, sql: """
+            let sql = """
                 SELECT DISTINCT b.* FROM books b
                 LEFT JOIN search_index si ON b.id = si.book_id
                 WHERE b.deleted_at IS NULL AND (
@@ -52,7 +51,12 @@ final class SearchRepository {
                     OR si.pinyin_authors_initials LIKE ? OR LOWER(b.isbn10) LIKE ?
                     OR LOWER(b.isbn13) LIKE ?
                 ) LIMIT ?
-            """, arguments: ["%\(kw)%", "%\(kw)%", "%\(kw)%", "%\(pe.full)%", "%\(pe.initials)%", "%\(pe.full)%", "%\(pe.initials)%", "%\(kw)%", "%\(kw)%", limit])
+                """
+            let args: [String] = [
+                "%\(kw)%", "%\(kw)%", "%\(kw)%", "%\(pe.full)%", "%\(pe.initials)%",
+                "%\(pe.full)%", "%\(pe.initials)%", "%\(kw)%", "%\(kw)%", "\(limit)"
+            ]
+            return try Book.fetchAll(db, sql: sql, arguments: args.map { $0 as any DatabaseValueConvertible })
         }
     }
 
@@ -62,9 +66,9 @@ final class SearchRepository {
             translators: parseJSON(book.translatorsJSON), publisher: book.publisher,
             isbn: book.isbn13 ?? book.isbn10, tags: [], shelf: nil,
             location: book.locationDetail, purchaseChannel: nil, bookID: book.id)
-        let a = indexArgs(entry, forUpdate: true)
-        try await dbQueue.write { db in
-            try db.execute(sql: """
+
+        try await dbQueue.writeWithoutTransaction { db in
+            let sql = """
                 INSERT INTO search_index (book_id, normalized_title, normalized_authors, normalized_translators,
                     normalized_publisher, normalized_isbn, normalized_tags, normalized_shelf,
                     normalized_location, normalized_purchase_channel,
@@ -72,36 +76,62 @@ final class SearchRepository {
                     combined_search_text, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(book_id) DO UPDATE SET
-                    normalized_title = ?, normalized_authors = ?, normalized_translators = ?,
-                    normalized_publisher = ?, normalized_isbn = ?, normalized_tags = ?,
-                    normalized_shelf = ?, normalized_location = ?, normalized_purchase_channel = ?,
-                    pinyin_title_full = ?, pinyin_title_initials = ?, pinyin_authors_full = ?,
-                    pinyin_authors_initials = ?, combined_search_text = ?, updated_at = ?
-            """, arguments: a)
+                    normalized_title = excluded.normalized_title,
+                    normalized_authors = excluded.normalized_authors,
+                    normalized_translators = excluded.normalized_translators,
+                    normalized_publisher = excluded.normalized_publisher,
+                    normalized_isbn = excluded.normalized_isbn,
+                    normalized_tags = excluded.normalized_tags,
+                    normalized_shelf = excluded.normalized_shelf,
+                    normalized_location = excluded.normalized_location,
+                    normalized_purchase_channel = excluded.normalized_purchase_channel,
+                    pinyin_title_full = excluded.pinyin_title_full,
+                    pinyin_title_initials = excluded.pinyin_title_initials,
+                    pinyin_authors_full = excluded.pinyin_authors_full,
+                    pinyin_authors_initials = excluded.pinyin_authors_initials,
+                    combined_search_text = excluded.combined_search_text,
+                    updated_at = excluded.updated_at
+                """
+            let a = indexArgs(entry)
+            try db.execute(sql: sql, arguments: a.map { $0 as any DatabaseValueConvertible })
         }
     }
 
     func rebuildIndex() async throws {
-        try await dbQueue.write { db in
-            try db.execute(sql: "DELETE FROM search_index")
-            try db.execute(sql: "DELETE FROM books_fts")
+        try await dbQueue.writeWithoutTransaction { db in
+            try db.execute(sql: "DELETE FROM search_index", arguments: [])
+            try db.execute(sql: "DELETE FROM books_fts", arguments: [])
             let books = try Book.fetchAll(db)
             for book in books {
                 let entry = SearchIndexEntry.from(title: book.title, authors: [], translators: [],
                     publisher: book.publisher, isbn: book.isbn13 ?? book.isbn10,
                     tags: [], shelf: nil, location: book.locationDetail, purchaseChannel: nil, bookID: book.id)
-                try db.execute(sql: """INSERT INTO search_index (book_id, normalized_title, normalized_authors, normalized_translators, normalized_publisher, normalized_isbn, normalized_tags, normalized_shelf, normalized_location, normalized_purchase_channel, pinyin_title_full, pinyin_title_initials, pinyin_authors_full, pinyin_authors_initials, combined_search_text, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", arguments: indexArgs(entry))
+                let args = indexArgs(entry)
+                try db.execute(sql: """
+                    INSERT INTO search_index (book_id, normalized_title, normalized_authors, normalized_translators,
+                        normalized_publisher, normalized_isbn, normalized_tags, normalized_shelf,
+                        normalized_location, normalized_purchase_channel,
+                        pinyin_title_full, pinyin_title_initials, pinyin_authors_full, pinyin_authors_initials,
+                        combined_search_text, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, arguments: args.map { $0 as any DatabaseValueConvertible })
             }
         }
     }
 
     func rebuildPinyinIndex() async throws {
-        try await dbQueue.write { db in
+        try await dbQueue.writeWithoutTransaction { db in
             let books = try Book.fetchAll(db)
             for book in books {
                 let tp = Pinyin.analyze(book.title)
                 let ap = Pinyin.analyze(parseJSON(book.authorsJSON).joined(separator: " "))
-                try db.execute(sql: """UPDATE search_index SET pinyin_title_full = ?, pinyin_title_initials = ?, pinyin_authors_full = ?, pinyin_authors_initials = ?, updated_at = ? WHERE book_id = ?""", arguments: [tp.full, tp.initials, ap.full, ap.initials, ISO8601(), book.id])
+                try db.execute(sql: """
+                    UPDATE search_index SET
+                        pinyin_title_full = ?, pinyin_title_initials = ?,
+                        pinyin_authors_full = ?, pinyin_authors_initials = ?,
+                        updated_at = ?
+                    WHERE book_id = ?
+                    """, arguments: [tp.full, tp.initials, ap.full, ap.initials, ISO8601(), book.id].map { $0 as any DatabaseValueConvertible })
             }
         }
     }
@@ -112,17 +142,14 @@ private func parseJSON(_ json: String?) -> [String] {
     return arr
 }
 
-private func indexArgs(_ entry: SearchIndexEntry, forUpdate: Bool = false) -> [any DatabaseValueConvertible] {
-    let now = ISO8601()
-    let base: [any DatabaseValueConvertible] = [
+private func indexArgs(_ entry: SearchIndexEntry) -> [any DatabaseValueConvertible] {
+    [
         entry.bookID, entry.normalizedTitle, entry.normalizedAuthors, entry.normalizedTranslators,
         entry.normalizedPublisher, entry.normalizedISBN, entry.normalizedTags, entry.normalizedShelf,
         entry.normalizedLocation, entry.normalizedPurchaseChannel,
         entry.pinyinTitleFull, entry.pinyinTitleInitials, entry.pinyinAuthorsFull, entry.pinyinAuthorsInitials,
-        entry.combinedSearchText, now
+        entry.combinedSearchText, ISO8601()
     ]
-    if forUpdate { return base + base[1...] + [now] }
-    return base
 }
 
 private func ISO8601() -> String { ISO8601DateFormatter().string(from: Date()) }

@@ -7,18 +7,18 @@ final class BookRepository {
 
     func fetchAll(excludeDeleted: Bool = true, limit: Int? = nil, offset: Int = 0) async throws -> [Book] {
         try await dbQueue.read { db in
-            var query = Book.all()
-            if excludeDeleted { query = query.filter(Column("deleted_at") == nil) }
-            if let limit { query = query.limit(limit, offset: offset) }
-            return try query.order(Column("created_at").desc).fetchAll(db)
+            var q = Book.all()
+            if excludeDeleted { q = q.filter(Column("deleted_at") == nil) }
+            if let limit { q = q.limit(limit, offset: offset) }
+            return try q.order(Column("created_at").desc).fetchAll(db)
         }
     }
 
     func fetchCount(excludeDeleted: Bool = true) async throws -> Int {
         try await dbQueue.read { db in
-            var query = Book.all()
-            if excludeDeleted { query = query.filter(Column("deleted_at") == nil) }
-            return try query.fetchCount(db)
+            var q = Book.all()
+            if excludeDeleted { q = q.filter(Column("deleted_at") == nil) }
+            return try q.fetchCount(db)
         }
     }
 
@@ -45,8 +45,10 @@ final class BookRepository {
 
     func fetch(byTagID tagID: String) async throws -> [Book] {
         try await dbQueue.read { db in
-            try Book.filter(Column("deleted_at") == nil)
-                .joining(optional: BookTag.filter(Column("tag_id") == tagID))
+            let ids = try BookTag.filter(Column("tag_id") == tagID).fetchAll(db).map(\.bookID)
+            guard !ids.isEmpty else { return [] }
+            return try Book.filter(Column("deleted_at") == nil)
+                .filter(ids.contains(Column("id")))
                 .order(Column("created_at").desc)
                 .fetchAll(db)
         }
@@ -54,33 +56,26 @@ final class BookRepository {
 
     @discardableResult func insert(_ book: Book) async throws -> Book {
         try await dbQueue.writeWithoutTransaction { db in
-            var b = book
-            try b.insert(db)
-            return b
+            var b = book; try b.insert(db); return b
         }
     }
 
     @discardableResult func update(_ book: Book) async throws -> Book {
         try await dbQueue.writeWithoutTransaction { db in
-            var b = book
-            b.updatedAt = ISO8601()
-            try b.update(db)
-            return b
+            var b = book; b.updatedAt = ISO8601(); try b.update(db); return b
         }
     }
 
     func softDelete(id: String) async throws {
         try await dbQueue.writeWithoutTransaction { db in
-            try db.execute(
-                sql: "UPDATE books SET deleted_at = ?, updated_at = ? WHERE id = ?",
-                arguments: [ISO8601(), ISO8601(), id])
+            try db.execute(sql: "UPDATE books SET deleted_at=?, updated_at=? WHERE id=?", arguments: [ISO8601(), ISO8601(), id])
         }
     }
 
     func softDelete(ids: [String]) async throws {
         try await dbQueue.writeWithoutTransaction { db in
             let ph = ids.map { "?" }.joined(separator: ",")
-            let sql = "UPDATE books SET deleted_at = ?, updated_at = ? WHERE id IN (\(ph))"
+            let sql = "UPDATE books SET deleted_at=?, updated_at=? WHERE id IN (\(ph))"
             var args: [any DatabaseValueConvertible] = [ISO8601(), ISO8601()]
             args.append(contentsOf: ids)
             try db.execute(sql: sql, arguments: args)
@@ -94,7 +89,7 @@ final class BookRepository {
     func batchUpdateShelf(bookIDs: [String], shelfID: String?) async throws {
         try await dbQueue.writeWithoutTransaction { db in
             let ph = bookIDs.map { "?" }.joined(separator: ",")
-            let sql = "UPDATE books SET shelf_id = ?, updated_at = ? WHERE id IN (\(ph))"
+            let sql = "UPDATE books SET shelf_id=?, updated_at=? WHERE id IN (\(ph))"
             var args: [any DatabaseValueConvertible] = [shelfID as any DatabaseValueConvertible, ISO8601()]
             args.append(contentsOf: bookIDs)
             try db.execute(sql: sql, arguments: args)
@@ -104,7 +99,7 @@ final class BookRepository {
     func batchUpdateReadingStatus(bookIDs: [String], status: ReadingStatus) async throws {
         try await dbQueue.writeWithoutTransaction { db in
             let ph = bookIDs.map { "?" }.joined(separator: ",")
-            let sql = "UPDATE books SET reading_status = ?, updated_at = ? WHERE id IN (\(ph))"
+            let sql = "UPDATE books SET reading_status=?, updated_at=? WHERE id IN (\(ph))"
             var args: [any DatabaseValueConvertible] = [status.rawValue, ISO8601()]
             args.append(contentsOf: bookIDs)
             try db.execute(sql: sql, arguments: args)
@@ -114,7 +109,7 @@ final class BookRepository {
     func batchMarkFinished(bookIDs: [String]) async throws {
         try await dbQueue.writeWithoutTransaction { db in
             let ph = bookIDs.map { "?" }.joined(separator: ",")
-            let sql = "UPDATE books SET reading_status = 'finished', progress_percent = 100, finished_at = ?, updated_at = ? WHERE id IN (\(ph))"
+            let sql = "UPDATE books SET reading_status='finished', progress_percent=100, finished_at=?, updated_at=? WHERE id IN (\(ph))"
             var args: [any DatabaseValueConvertible] = [ISO8601(), ISO8601()]
             args.append(contentsOf: bookIDs)
             try db.execute(sql: sql, arguments: args)

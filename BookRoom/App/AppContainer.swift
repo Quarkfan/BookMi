@@ -50,7 +50,7 @@ final class AppContainer: ObservableObject {
     func authenticate() { isAuthenticated = true }
 
     private func seedDefaultPurchaseChannels() async throws {
-        let count = try await databaseManager.dbQueue.read { db in
+        let count = try await databaseManager.dbQueue.read { (db: Database) in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM purchase_channels") ?? 0
         }
         guard count == 0 else { return }
@@ -60,7 +60,7 @@ final class AppContainer: ObservableObject {
             ("线下书店", 4), ("二手书", 5), ("朋友赠送", 6), ("其他", 7)
         ]
         let now = ISO8601DateFormatter().string(from: Date())
-        try await databaseManager.dbQueue.write { db in
+        try await databaseManager.dbQueue.write { (db: Database) in
             for (name, order) in defaults {
                 try db.execute(
                     sql: "INSERT INTO purchase_channels (id, name, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",

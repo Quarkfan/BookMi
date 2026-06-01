@@ -1,16 +1,91 @@
 import Foundation
 
+protocol BookLookupProvider {
+    var name: String { get }
+    func lookup(isbn: String) async throws -> [BookMetadataDraft]
+    func search(keyword: String) async throws -> [BookMetadataDraft]
+}
+
+struct BookMetadataDraft: Codable, Identifiable {
+    var id: String { isbn13 ?? isbn10 ?? UUID().uuidString }
+
+    var title: String?
+    var subtitle: String?
+    var authors: [String]?
+    var translators: [String]?
+    var isbn10: String?
+    var isbn13: String?
+    var publisher: String?
+    var publishedDate: String?
+    var pageCount: Int?
+    var price: String?
+    var edition: String?
+    var series: String?
+    var binding: String?
+    var language: String?
+    var category: String?
+    var summary: String?
+    var coverURL: URL?
+    var dataSource: String?
+    var rawJSON: String?
+
+    var hasContent: Bool { title != nil && !title!.isEmpty }
+
+    func merging(with other: BookMetadataDraft) -> BookMetadataDraft {
+        var m = self
+        if m.title == nil || m.title!.isEmpty { m.title = other.title }
+        if m.subtitle == nil { m.subtitle = other.subtitle }
+        if m.authors == nil || m.authors!.isEmpty { m.authors = other.authors }
+        if m.translators == nil { m.translators = other.translators }
+        if m.isbn10 == nil { m.isbn10 = other.isbn10 }
+        if m.isbn13 == nil { m.isbn13 = other.isbn13 }
+        if m.publisher == nil { m.publisher = other.publisher }
+        if m.publishedDate == nil { m.publishedDate = other.publishedDate }
+        if m.pageCount == nil { m.pageCount = other.pageCount }
+        if m.price == nil { m.price = other.price }
+        if m.edition == nil { m.edition = other.edition }
+        if m.series == nil { m.series = other.series }
+        if m.binding == nil { m.binding = other.binding }
+        if m.language == nil { m.language = other.language }
+        if m.category == nil { m.category = other.category }
+        if m.summary == nil { m.summary = other.summary }
+        if m.coverURL == nil { m.coverURL = other.coverURL }
+        return m
+    }
+}
+
+enum BookLookupError: Error, LocalizedError {
+    case networkError(String)
+    case invalidResponse
+    case notFound
+
+    var errorDescription: String? {
+        switch self {
+        case .networkError(let msg): return "Network error: \(msg)"
+        case .invalidResponse: return "Invalid response"
+        case .notFound: return "Not found"
+        }
+    }
+}
+
+extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
 /// Book lookup service combining multiple providers
 final class BookLookupService {
-    static let defaultProviders: [any BookLookupProvider] = [
-        OpenLibraryProvider(),
-        GoogleBooksProvider()
-    ]
+    static var defaultProviders: [any BookLookupProvider] {
+        [OpenLibraryProvider(), GoogleBooksProvider()]
+    }
 
     private let providers: [any BookLookupProvider]
 
-    init(providers: [any BookLookupProvider] = Self.defaultProviders) {
+    init(providers: [any BookLookupProvider]) {
         self.providers = providers
+    }
+
+    convenience init() {
+        self.init(providers: Self.defaultProviders)
     }
 
     func lookup(isbn: String) async -> [BookMetadataDraft] {
@@ -69,78 +144,6 @@ final class BookLookupService {
         }
         return Array(grouped.values)
     }
-}
-
-protocol BookLookupProvider {
-    var name: String { get }
-    func lookup(isbn: String) async throws -> [BookMetadataDraft]
-    func search(keyword: String) async throws -> [BookMetadataDraft]
-}
-
-struct BookMetadataDraft: Codable, Identifiable {
-    var id: String { isbn13 ?? isbn10 ?? UUID().uuidString }
-
-    var title: String?
-    var subtitle: String?
-    var authors: [String]?
-    var translators: [String]?
-    var isbn10: String?
-    var isbn13: String?
-    var publisher: String?
-    var publishedDate: String?
-    var pageCount: Int?
-    var price: String?
-    var edition: String?
-    var series: String?
-    var binding: String?
-    var language: String?
-    var category: String?
-    var summary: String?
-    var coverURL: URL?
-    var dataSource: String?
-    var rawJSON: String?
-
-    var hasContent: Bool { title != nil && !title!.isEmpty }
-
-    func merging(with other: BookMetadataDraft) -> BookMetadataDraft {
-        var merged = self
-        if merged.title == nil || merged.title!.isEmpty { merged.title = other.title }
-        if merged.subtitle == nil { merged.subtitle = other.subtitle }
-        if merged.authors == nil || merged.authors!.isEmpty { merged.authors = other.authors }
-        if merged.translators == nil { merged.translators = other.translators }
-        if merged.isbn10 == nil { merged.isbn10 = other.isbn10 }
-        if merged.isbn13 == nil { merged.isbn13 = other.isbn13 }
-        if merged.publisher == nil { merged.publisher = other.publisher }
-        if merged.publishedDate == nil { merged.publishedDate = other.publishedDate }
-        if merged.pageCount == nil { merged.pageCount = other.pageCount }
-        if merged.price == nil { merged.price = other.price }
-        if merged.edition == nil { merged.edition = other.edition }
-        if merged.series == nil { merged.series = other.series }
-        if merged.binding == nil { merged.binding = other.binding }
-        if merged.language == nil { merged.language = other.language }
-        if merged.category == nil { merged.category = other.category }
-        if merged.summary == nil { merged.summary = other.summary }
-        if merged.coverURL == nil { merged.coverURL = other.coverURL }
-        return merged
-    }
-}
-
-enum BookLookupError: Error, LocalizedError {
-    case networkError(String)
-    case invalidResponse
-    case notFound
-
-    var errorDescription: String? {
-        switch self {
-        case .networkError(let msg): return "Network error: \(msg)"
-        case .invalidResponse: return "Invalid response"
-        case .notFound: return "Not found"
-        }
-    }
-}
-
-extension String {
-    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
 struct OpenLibraryProvider: BookLookupProvider {

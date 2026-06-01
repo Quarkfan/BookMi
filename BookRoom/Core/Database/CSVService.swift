@@ -329,7 +329,7 @@ enum CSVField: String, CaseIterable {
             return ""
         case .purchaseChannel:
             if let channelID = book.purchaseChannelID, let dbQueue {
-                if let channel = try? await dbQueue.read({ db in try PurchaseChannel.fetchOne(db, key: channelID) }) {
+                if let channel = try? await dbQueue.read({ (db: Database) in try PurchaseChannel.fetchOne(db, key: channelID) }) {
                     return channel.name
                 }
             }

@@ -121,7 +121,7 @@ struct BorrowManagementView: View {
     @MainActor
     private func loadBorrowRecords() async {
         do {
-            borrowRecords = try await appContainer.dbQueue.read { db in
+            borrowRecords = try await appContainer.dbQueue.read { (db: Database) in
                 try BorrowRecord
                     .filter(Column("book_id") == book.id)
                     .order(Column("borrowed_at").desc)
@@ -150,7 +150,7 @@ struct BorrowManagementView: View {
 
         Task {
             do {
-                try await appContainer.dbQueue.write { db in
+                try await appContainer.dbQueue.write { (db: Database) in
                     try record.insert(db)
                     try db.execute(
                         sql: "UPDATE books SET borrow_status = 'borrowed', updated_at = ? WHERE id = ?",
@@ -171,7 +171,7 @@ struct BorrowManagementView: View {
 
         Task {
             do {
-                try await appContainer.dbQueue.write { db in
+                try await appContainer.dbQueue.write { (db: Database) in
                     try db.execute(
                         sql: """
                         UPDATE borrow_records

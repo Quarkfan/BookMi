@@ -62,8 +62,6 @@ final class CSVService {
         let headerLine = lines[0]
         let headers = parseCSVLine(headerLine)
 
-        // Build column index mapping
-        let columnMapping: [Int: CSVField] = [:]
         var fieldIndexMap: [Int: CSVField] = [:]
         for (i, header) in headers.enumerated() {
             if let field = fieldMapping[header.trimmingCharacters(in: .whitespaces)] {

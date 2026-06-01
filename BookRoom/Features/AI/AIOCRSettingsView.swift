@@ -58,7 +58,7 @@ struct AIOCRSettingsView: View {
                     .keyboardType(.numberPad)
                     .onChange(of: timeout) { _, newValue in
                         if let v = Int(newValue) {
-                            appContainer.settings.set(v, forKey: .aiTimeout)
+                            appContainer.settings.aiTimeout = v
                         }
                     }
 
@@ -66,7 +66,7 @@ struct AIOCRSettingsView: View {
                     .keyboardType(.numberPad)
                     .onChange(of: maxTokens) { _, newValue in
                         if let v = Int(newValue) {
-                            appContainer.settings.set(v, forKey: .aiMaxTokens)
+                            appContainer.settings.aiMaxTokens = v
                         }
                     }
             }
@@ -120,8 +120,8 @@ struct AIOCRSettingsView: View {
         isEnabled = appContainer.settings.isAICapabilityEnabled
         baseURL = appContainer.settings.aiBaseURL ?? ""
         modelName = appContainer.settings.aiModelName ?? ""
-        timeout = (await appContainer.settings.int(forKey: .aiTimeout)).map { String($0) } ?? "60"
-        maxTokens = (await appContainer.settings.int(forKey: .aiMaxTokens)).map { String($0) } ?? "2000"
+        timeout = String(appContainer.settings.aiTimeout)
+        maxTokens = String(appContainer.settings.aiMaxTokens)
 
         if let key = appContainer.keychain.getLLMAPIKey() {
             apiKey = key

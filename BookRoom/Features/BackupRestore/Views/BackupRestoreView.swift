@@ -66,7 +66,11 @@ struct BackupRestoreView: View {
                             }
                         }
                     }
-                    .onDelete(perform: deleteBackup)
+                    .onDelete { indices in
+                        for i in indices {
+                            deleteBackup(backups[i])
+                        }
+                    }
                 }
             }
         }

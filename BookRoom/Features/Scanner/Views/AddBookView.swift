@@ -8,6 +8,7 @@ struct AddBookView: View {
     @State private var showSearch = false
     @State private var showManualEntry = false
     @State private var showCSVImport = false
+    @State private var showOCR = false
     @State private var selectedSearchDraft: BookMetadataDraft?
     @State private var scannedISBN: String?
     @State private var isLoadingLookup = false
@@ -131,6 +132,29 @@ struct AddBookView: View {
                     )
                     showManualEntry = true
                 }
+            }
+        }
+    }
+
+    // MARK: - Save
+
+    private func saveBook(_ draft: BookMetadataDraft) {
+        Task {
+            do {
+                var book = Book(from: draft, shelfID: appContainer.settings.defaultShelfID, purchaseChannelID: appContainer.settings.defaultPurchaseChannelID)
+                book = try await appContainer.bookRepo.insert(book)
+                if !appContainer.settings.defaultTagIDs.isEmpty {
+                    try await appContainer.tagRepo.addTags(tagIDs: appContainer.settings.defaultTagIDs, toBooks: [book.id])
+                }
+                if draft.coverURL != nil {
+                    let fileName = await draft.downloadCover(forBookID: book.id)
+                    var updated = book
+                    updated.coverFileName = fileName
+                    try await appContainer.bookRepo.update(updated)
+                }
+                try await appContainer.searchRepo.updateIndex(for: book)
+            } catch {
+                print("Failed to save book: \(error)")
             }
         }
     }

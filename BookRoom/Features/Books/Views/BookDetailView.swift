@@ -43,7 +43,7 @@ struct BookDetailView: View {
                         InfoGroup(label: "页数", value: book.pageCount.map { "\($0) 页" })
                         InfoGroup(label: "ISBN", value: book.isbn13 ?? book.isbn10)
                         InfoGroup(label: "装帧", value: book.binding)
-                        InfoGroup(label: "定价", value: book.price.map { "¥\($0)" })
+                        InfoGroup(label: "定价", value: book.price.flatMap { (s: String) in "¥\(s)" } ?? "")
                         InfoGroup(label: "版次", value: book.edition)
                         InfoGroup(label: "丛书", value: book.series)
                         InfoGroup(label: "语言", value: book.language)
@@ -59,7 +59,7 @@ struct BookDetailView: View {
                         InfoGroup(label: "标签", value: tags.map { $0.name }.joined(separator: ", "))
                         InfoGroup(label: "购买渠道", value: purchaseChannel?.name)
                         InfoGroup(label: "购买日期", value: book.purchaseDate)
-                        InfoGroup(label: "购买价格", value: book.purchasePrice.map { "¥\($0)" })
+                        InfoGroup(label: "购买价格", value: book.purchasePrice.flatMap { (s: String) in "¥\(s)" } ?? "")
                         InfoGroup(label: "数据来源", value: book.dataSource)
                     }
 
@@ -73,8 +73,8 @@ struct BookDetailView: View {
                             ReadingProgressControl(book: book)
                         }
 
-                        InfoGroup(label: "开始阅读", value: book.startedAt.map { formatDate($0) })
-                        InfoGroup(label: "完成阅读", value: book.finishedAt.map { formatDate($0) })
+                        InfoGroup(label: "开始阅读", value: book.startedAt.flatMap { (s: String) in formatDate(s) } ?? "")
+                        InfoGroup(label: "完成阅读", value: book.finishedAt.flatMap { (s: String) in formatDate(s) } ?? "")
                     }
 
                     Divider()
@@ -86,7 +86,7 @@ struct BookDetailView: View {
                                 InfoGroup(label: "借阅人", value: record.borrowerName)
                                 InfoGroup(label: "联系方式", value: record.contact)
                                 InfoGroup(label: "借出时间", value: formatDate(record.borrowedAt))
-                                InfoGroup(label: "预计归还", value: record.expectedReturnAt.map { formatDate($0) })
+                                InfoGroup(label: "预计归还", value: record.expectedReturnAt.flatMap { (s: String) in formatDate(s) } ?? "")
                             }
                         } else {
                             Text("当前未借出")
@@ -209,17 +209,20 @@ struct BookDetailView: View {
 
     @MainActor
     private func loadRelatedData() async {
+        let bookID = book.id
+        let purchaseChannelID = book.purchaseChannelID
+        let shelfID = book.shelfID
         do {
             // Load shelf
-            if let shelfID = book.shelfID {
+            if let shelfID {
                 shelf = try await appContainer.shelfRepo.fetch(byID: shelfID)
             }
 
             // Load tags
-            tags = try await appContainer.tagRepo.fetchTags(forBookID: book.id)
+            tags = try await appContainer.tagRepo.fetchTags(forBookID: bookID)
 
             // Load purchase channel
-            if let channelID = book.purchaseChannelID {
+            if let channelID = purchaseChannelID {
                 purchaseChannel = try await appContainer.databaseManager.dbQueue.read { (db: Database) in
                     try PurchaseChannel.fetchOne(db, key: channelID)
                 }
@@ -228,7 +231,7 @@ struct BookDetailView: View {
             // Load active borrow record
             borrowRecord = try await appContainer.databaseManager.dbQueue.read { (db: Database) in
                 try BorrowRecord
-                    .filter(Column("book_id") == book.id)
+                    .filter(Column("book_id") == bookID)
                     .filter(Column("status") == "borrowed")
                     .fetchOne(db)
             }
@@ -324,7 +327,7 @@ struct ReadingStatusControl: View {
                         updated.finishedAt = ISO8601DateFormatter().string(from: Date())
                         updated.progressPercent = 100
                     }
-                    try? await appContainer.bookRepo.update(updated)
+                    _ = try? await appContainer.bookRepo.update(updated)
                     book = updated
                 }
             }

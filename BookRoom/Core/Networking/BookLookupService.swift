@@ -269,9 +269,7 @@ struct GoogleBooksProvider: BookLookupProvider {
         let isbn13 = industryIdentifiers.first(where: { $0["type"] as? String == "ISBN_13" })?["identifier"] as? String
 
         let imageLinks = volumeInfo["imageLinks"] as? [String: Any]
-        let coverURL: URL? = (imageLinks?["thumbnail"] as? String)?
-            .replacingOccurrences(of: "http://", with: "https://")
-            .flatMap { URL(string: $0) }
+        let coverURL: URL? = (imageLinks?["thumbnail"] as? String).flatMap { URL(string: $0) }
 
         return BookMetadataDraft(
             title: (volumeInfo["title"] as? String)?.nilIfEmpty,

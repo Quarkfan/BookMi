@@ -153,10 +153,6 @@ struct BorrowManagementView: View {
             updatedAt: now
         )
 
-        let name = borrowerName
-        let cnt = contact
-        let exp = expectedReturnDate
-
         Task {
             do {
                 try await dbQueue.write { (db: Database) in
@@ -186,8 +182,6 @@ struct BorrowManagementView: View {
     }
 
     private func returnBook(_ record: BorrowRecord) {
-        let now = ISO8601DateFormatter().string(from: Date())
-
         Task {
             do {
                 let now = ISO8601DateFormatter().string(from: Date())

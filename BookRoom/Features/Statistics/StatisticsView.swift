@@ -167,7 +167,7 @@ struct StatisticsView: View {
                                 Rectangle()
                                     .fill(Color.blue)
                                     .frame(
-                                        width: geo.size.width * CGFloat(item.count) / max(totalBooks, 1),
+                                        width: geo.size.width * CGFloat(item.count) / CGFloat(max(totalBooks, 1)),
                                         height: 8
                                     )
                             }
@@ -297,7 +297,7 @@ struct StatisticsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                FlowLayout(items: tagStats.prefix(20)) { item in
+                FlowLayout(items: tagStats.prefix(20), id: \.name) { item in
                     TagChip(name: item.name, count: item.count)
                 }
             }
@@ -483,18 +483,20 @@ struct TagChip: View {
 
 // MARK: - Flow Layout
 
-struct FlowLayout<Data: RandomAccessCollection, Content: View>: View where Data.Element: Hashable {
+struct FlowLayout<Data: RandomAccessCollection, ID: Hashable, Content: View>: View {
     let items: Data
+    let id: KeyPath<Data.Element, ID>
     let content: (Data.Element) -> Content
 
-    init(items: Data, @ViewBuilder content: @escaping (Data.Element) -> Content) {
+    init(items: Data, id: KeyPath<Data.Element, ID>, @ViewBuilder content: @escaping (Data.Element) -> Content) {
         self.items = items
+        self.id = id
         self.content = content
     }
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 80, maximum: 120))], spacing: 8) {
-            ForEach(items, id: \.self) { item in
+            ForEach(items, id: id) { item in
                 content(item)
             }
         }

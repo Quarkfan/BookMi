@@ -28,9 +28,6 @@ struct BorrowRecord: Codable, FetchableRecord, MutablePersistableRecord {
         case createdAt = "created_at", updatedAt = "updated_at"
     }
 
-    mutating func didInsert(_ inserted: InsertionSuccess) {
-        id = inserted.rowID as? String ?? id
-    }
 }
 
 struct PurchaseChannel: Codable, FetchableRecord, MutablePersistableRecord {
@@ -48,9 +45,5 @@ struct PurchaseChannel: Codable, FetchableRecord, MutablePersistableRecord {
         case sortOrder = "sort_order"
         case createdAt = "created_at", updatedAt = "updated_at"
         case deletedAt = "deleted_at"
-    }
-
-    mutating func didInsert(_ inserted: InsertionSuccess) {
-        id = inserted.rowID as? String ?? id
     }
 }

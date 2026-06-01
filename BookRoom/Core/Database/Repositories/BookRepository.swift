@@ -83,7 +83,7 @@ final class BookRepository {
     }
 
     func permanentDelete(id: String) async throws {
-        try await dbQueue.writeWithoutTransaction { (db: Database) in try Book.deleteOne(db, key: id) }
+        _ = try await dbQueue.writeWithoutTransaction { (db: Database) in try Book.deleteOne(db, key: id) }
     }
 
     func batchUpdateShelf(bookIDs: [String], shelfID: String?) async throws {

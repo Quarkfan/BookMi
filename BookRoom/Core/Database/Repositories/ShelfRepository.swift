@@ -88,7 +88,7 @@ final class ShelfRepository {
     }
 
     func permanentDelete(id: String) async throws {
-        try await dbQueue.write { (db: Database) in
+        _ = try await dbQueue.write { (db: Database) in
             try Shelf.deleteOne(db, key: id)
         }
     }

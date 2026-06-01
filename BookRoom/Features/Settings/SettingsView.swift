@@ -266,19 +266,17 @@ struct ChannelEditView: View {
                     Button("保存") {
                         Task {
                             let now = ISO8601DateFormatter().string(from: Date())
-                            var ch = channel ?? PurchaseChannel(
+                            let ch = channel ?? PurchaseChannel(
                                 id: UUID().uuidString, name: name, sortOrder: 0,
                                 createdAt: now, updatedAt: now, deletedAt: nil)
-                            ch.name = name
-                            ch.updatedAt = now
                             do {
                                 if channel != nil {
                                     try await appContainer.databaseManager.dbQueue.write { (db: Database) in
-                                        try ch.update(db)
+                                        try db.execute(sql: "UPDATE purchase_channels SET name=?, sort_order=?, updated_at=? WHERE id=?", arguments: [ch.name, ch.sortOrder, now, ch.id])
                                     }
                                 } else {
                                     try await appContainer.databaseManager.dbQueue.write { (db: Database) in
-                                        try ch.insert(db)
+                                        try db.execute(sql: "INSERT INTO purchase_channels (id, name, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?)", arguments: [ch.id, ch.name, ch.sortOrder, now, now])
                                     }
                                 }
                                 await MainActor.run { onSave(ch) }

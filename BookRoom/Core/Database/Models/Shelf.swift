@@ -21,7 +21,4 @@ struct Shelf: Codable, FetchableRecord, MutablePersistableRecord {
         case deletedAt = "deleted_at"
     }
 
-    mutating func didInsert(_ inserted: InsertionSuccess) {
-        id = inserted.rowID as? String ?? id
-    }
 }

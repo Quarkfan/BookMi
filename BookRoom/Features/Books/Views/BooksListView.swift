@@ -169,7 +169,7 @@ struct BooksListView: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            var query = try await appContainer.bookRepo.fetchAll()
+            let query = try await appContainer.bookRepo.fetchAll()
             books = sortBooks(query)
         } catch {
             print("Failed to load books: \(error)")

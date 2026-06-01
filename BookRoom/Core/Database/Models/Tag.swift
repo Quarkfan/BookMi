@@ -19,9 +19,6 @@ struct Tag: Codable, FetchableRecord, MutablePersistableRecord {
         case deletedAt = "deleted_at"
     }
 
-    mutating func didInsert(_ inserted: InsertionSuccess) {
-        id = inserted.rowID as? String ?? id
-    }
 }
 
 struct BookTag: Codable, FetchableRecord, MutablePersistableRecord {

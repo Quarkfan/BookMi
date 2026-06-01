@@ -1,4 +1,5 @@
 import SwiftUI
+import GRDB
 
 struct SettingsView: View {
     @EnvironmentObject var appContainer: AppContainer
@@ -338,6 +339,35 @@ struct DataQualityView: View {
                 print("Failed to calculate quality metrics: \(error)")
             }
         }
+    }
+}
+
+// MARK: - Stub Views (TODO: implement)
+
+struct DisplayModeSettingView: View {
+    @AppStorage("displayMode") private var displayMode: String = "list"
+    var body: some View {
+        Form {
+            Picker("显示模式", selection: $displayMode) {
+                Text("列表").tag("list")
+                Text("网格").tag("grid")
+            }
+        }
+        .navigationTitle("显示模式")
+    }
+}
+
+struct SortSettingView: View {
+    @AppStorage("sortMode") private var sortMode: String = "createdAt"
+    var body: some View {
+        Form {
+            Picker("排序方式", selection: $sortMode) {
+                Text("添加时间").tag("createdAt")
+                Text("书名拼音").tag("pinyin")
+                Text("首字母").tag("firstLetter")
+            }
+        }
+        .navigationTitle("排序方式")
     }
 }
 

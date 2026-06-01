@@ -1,4 +1,5 @@
 import SwiftUI
+import GRDB
 
 struct BookDetailView: View {
     @State private var book: Book

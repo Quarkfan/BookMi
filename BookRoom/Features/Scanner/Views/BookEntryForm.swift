@@ -1,4 +1,5 @@
 import SwiftUI
+import GRDB
 
 /// Book entry form - used after scanning, searching, or for manual entry
 struct BookEntryForm: View {

@@ -53,14 +53,13 @@ final class CSVService {
         searchRepo: SearchRepository
     ) async throws -> ImportReport {
         let content = try String(contentsOf: csvURL, encoding: .utf8)
-        let lines = content.split(omittingEmptySubsequences: true) { $0.isNewline }.map(String.init)
-        guard lines.count > 1 else {
+        let rows = parseCSV(content)
+        guard rows.count > 1 else {
             throw CSVError.emptyFile
         }
 
         // Parse header
-        let headerLine = lines[0]
-        let headers = parseCSVLine(headerLine)
+        let headers = rows[0]
 
         var fieldIndexMap: [Int: CSVField] = [:]
         for (i, header) in headers.enumerated() {
@@ -69,12 +68,10 @@ final class CSVService {
             }
         }
 
-        var report = ImportReport(totalRows: lines.count - 1)
+        var report = ImportReport(totalRows: rows.count - 1)
 
         // Parse data rows
-        for rowLine in lines.dropFirst() {
-            let cells = parseCSVLine(rowLine)
-
+        for cells in rows.dropFirst() {
             // Build draft from cells
             var draft = BookMetadataDraft()
             for (colIndex, cell) in cells.enumerated() {
@@ -105,7 +102,14 @@ final class CSVService {
                 report.updated += 1
             case .createNew:
                 var book = Book(from: draft, shelfID: defaultShelfID, purchaseChannelID: defaultPurchaseChannelID)
-                book = try await bookRepo.insert(book)
+                do {
+                    book = try await bookRepo.insert(book)
+                } catch {
+                    print("[CSVImport] INSERT failed for '\(draft.title ?? "unknown")': \(error)")
+                    print("[CSVImport]   ISBN: \(draft.isbn13 ?? draft.isbn10 ?? "none")")
+                    print("[CSVImport]   Authors JSON: \(draft.authors.map { String(data: try! JSONEncoder().encode($0), encoding: .utf8) ?? "nil" } ?? "nil")")
+                    throw error
+                }
 
                 // Add default tags
                 if !defaultTagIDs.isEmpty {
@@ -194,24 +198,59 @@ final class CSVService {
         return try? String(data: JSONEncoder().encode(arr), encoding: .utf8)
     }
 
-    private static func parseCSVLine(_ line: String) -> [String] {
-        var cells: [String] = []
+    static func parseCSV(_ content: String) -> [[String]] {
+        var rows: [[String]] = []
+        var row: [String] = []
         var current = ""
         var inQuotes = false
+        var iterator = content.makeIterator()
 
-        for char in line {
+        while let char = iterator.next() {
             switch char {
             case "\"":
-                inQuotes.toggle()
+                if inQuotes, let next = iterator.next() {
+                    if next == "\"" {
+                        current.append("\"")
+                    } else {
+                        inQuotes = false
+                        if next == "," {
+                            row.append(current)
+                            current = ""
+                        } else if next == "\n" {
+                            row.append(current)
+                            rows.append(row)
+                            row = []
+                            current = ""
+                        } else if next != "\r" {
+                            current.append(next)
+                        }
+                    }
+                } else {
+                    inQuotes.toggle()
+                }
             case "," where !inQuotes:
-                cells.append(current)
+                row.append(current)
                 current = ""
+            case "\n" where !inQuotes:
+                row.append(current)
+                rows.append(row)
+                row = []
+                current = ""
+            case "\r" where !inQuotes:
+                continue
             default:
                 current.append(char)
             }
         }
-        cells.append(current)
-        return cells
+
+        if !current.isEmpty || !row.isEmpty {
+            row.append(current)
+            rows.append(row)
+        }
+
+        return rows.filter { row in
+            row.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        }
     }
 
     private static func encodeCSVCell(_ value: String) -> String {

@@ -84,6 +84,10 @@ struct Book: Codable, FetchableRecord, MutablePersistableRecord {
         case deletedAt = "deleted_at"
     }
 
+    // GRDB column encoding: camelCase property -> snake_case DB column
+    static var databaseColumnEncodingStrategy: DatabaseColumnEncodingStrategy {
+        .convertToSnakeCase
+    }
 }
 
 // MARK: - Reading Status

@@ -8,6 +8,9 @@ build/
 .packages/
 Package.resolved
 
+# Personal library imports, generated covers, and backup archives
+init/
+
 # macOS
 .DS_Store
 

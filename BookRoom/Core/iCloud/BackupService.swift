@@ -115,27 +115,18 @@ final class BackupService {
             throw BackupError.invalidBackup("Missing database.sqlite")
         }
 
-        let dbQueue = AppContainer.shared.databaseManager.dbQueue
-        guard let dbQueue else { throw BackupError.databaseNotInitialized }
+        guard AppContainer.shared.databaseManager.dbQueue != nil else {
+            throw BackupError.databaseNotInitialized
+        }
 
         switch mode {
         case .overwrite:
-            try await dbQueue.writeWithoutTransaction { (db: Database) in
-                try db.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)")
-            }
-            let currentDB = AppPaths.libraryDataURL.appendingPathComponent("database.sqlite")
-            try FileManager.default.removeItem(at: currentDB)
-            try FileManager.default.copyItem(at: dbFile, to: currentDB)
-
-            let currentCovers = AppPaths.coversURL
-            try? FileManager.default.removeItem(at: currentCovers)
-            let backupCovers = tempDir.appendingPathComponent("covers")
-            if FileManager.default.fileExists(atPath: backupCovers.path) {
-                try FileManager.default.copyItem(at: backupCovers, to: currentCovers)
-            }
+            try await overwriteBackup(from: dbFile)
+            try restoreCovers(from: tempDir, replacingExisting: true)
 
         case .merge, .booksOnly:
             try await mergeBackup(from: dbFile, mode: mode)
+            try restoreCovers(from: tempDir, replacingExisting: false)
         }
 
         try FileManager.default.removeItem(at: tempDir)
@@ -227,6 +218,63 @@ final class BackupService {
                     INSERT INTO settings SELECT * FROM backup.settings
                     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
                     """)
+            }
+        }
+    }
+
+    private static func overwriteBackup(from dbFile: URL) async throws {
+        let dbQueue = AppContainer.shared.databaseManager.dbQueue
+        guard let dbQueue else { return }
+
+        try await dbQueue.writeWithoutTransaction { (db: Database) in
+            try db.execute(sql: "ATTACH DATABASE ? AS backup", arguments: [dbFile.path])
+            defer { try? db.execute(sql: "DETACH DATABASE backup") }
+
+            try db.execute(sql: "DELETE FROM book_tags")
+            try db.execute(sql: "DELETE FROM borrow_records")
+            try db.execute(sql: "DELETE FROM books_fts")
+            try db.execute(sql: "DELETE FROM search_index")
+            try db.execute(sql: "DELETE FROM books")
+            try db.execute(sql: "DELETE FROM shelves")
+            try db.execute(sql: "DELETE FROM tags")
+            try db.execute(sql: "DELETE FROM purchase_channels")
+            try db.execute(sql: "DELETE FROM settings")
+            try db.execute(sql: "DELETE FROM ai_ocr_logs")
+            try db.execute(sql: "DELETE FROM operation_logs")
+
+            try db.execute(sql: "INSERT INTO books SELECT * FROM backup.books")
+            try db.execute(sql: "INSERT INTO shelves SELECT * FROM backup.shelves")
+            try db.execute(sql: "INSERT INTO tags SELECT * FROM backup.tags")
+            try db.execute(sql: "INSERT INTO book_tags SELECT * FROM backup.book_tags")
+            try db.execute(sql: "INSERT INTO borrow_records SELECT * FROM backup.borrow_records")
+            try db.execute(sql: "INSERT INTO purchase_channels SELECT * FROM backup.purchase_channels")
+            try db.execute(sql: "INSERT INTO settings SELECT * FROM backup.settings")
+            try db.execute(sql: "INSERT INTO ai_ocr_logs SELECT * FROM backup.ai_ocr_logs")
+            try db.execute(sql: "INSERT INTO operation_logs SELECT * FROM backup.operation_logs")
+            try db.execute(sql: "INSERT INTO search_index SELECT * FROM backup.search_index")
+            try db.execute(sql: "INSERT INTO books_fts SELECT * FROM backup.books_fts")
+        }
+    }
+
+    private static func restoreCovers(from tempDir: URL, replacingExisting: Bool) throws {
+        let currentCovers = AppPaths.coversURL
+        let backupCovers = tempDir.appendingPathComponent("covers")
+        guard FileManager.default.fileExists(atPath: backupCovers.path) else { return }
+
+        if replacingExisting {
+            try? FileManager.default.removeItem(at: currentCovers)
+            try FileManager.default.copyItem(at: backupCovers, to: currentCovers)
+            return
+        }
+
+        if !FileManager.default.fileExists(atPath: currentCovers.path) {
+            try FileManager.default.createDirectory(at: currentCovers, withIntermediateDirectories: true)
+        }
+        let files = try FileManager.default.contentsOfDirectory(at: backupCovers, includingPropertiesForKeys: nil)
+        for source in files {
+            let destination = currentCovers.appendingPathComponent(source.lastPathComponent)
+            if !FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.copyItem(at: source, to: destination)
             }
         }
     }

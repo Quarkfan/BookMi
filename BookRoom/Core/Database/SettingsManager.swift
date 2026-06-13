@@ -7,10 +7,10 @@ final class SettingsManager: ObservableObject {
     @Published var displayMode: DisplayMode = .list {
         didSet { UserDefaults.standard.set(displayMode.rawValue, forKey: "ui.display_mode") }
     }
-    @Published var sortField: SortField = .pinyin {
+    @Published var sortField: SortField = .createdAt {
         didSet { UserDefaults.standard.set(sortField.rawValue, forKey: "ui.sort_field") }
     }
-    @Published var sortOrder: SortOrder = .ascending {
+    @Published var sortOrder: SortOrder = .descending {
         didSet { UserDefaults.standard.set(sortOrder.rawValue, forKey: "ui.sort_order") }
     }
     @Published var defaultShelfID: String? {
@@ -43,6 +43,24 @@ final class SettingsManager: ObservableObject {
     @Published var aiMaxTokens: Int = 2000 {
         didSet { UserDefaults.standard.set(aiMaxTokens, forKey: "ai.max_tokens") }
     }
+    @Published var isJuheISBNEnabled: Bool = false {
+        didSet { UserDefaults.standard.set(isJuheISBNEnabled, forKey: "book_lookup.juhe_isbn_enabled") }
+    }
+    @Published var isGuguISBNEnabled: Bool = false {
+        didSet { UserDefaults.standard.set(isGuguISBNEnabled, forKey: "book_lookup.gugu_isbn_enabled") }
+    }
+    @Published var isJisuISBNEnabled: Bool = false {
+        didSet { UserDefaults.standard.set(isJisuISBNEnabled, forKey: "book_lookup.jisu_isbn_enabled") }
+    }
+    @Published var isAIBookLookupEnabled: Bool = false {
+        didSet { UserDefaults.standard.set(isAIBookLookupEnabled, forKey: "book_lookup.ai_isbn_enabled") }
+    }
+    @Published var bookLookupProviderOrder: [String] = BookLookupProviderKey.defaultOrder.map(\.rawValue) {
+        didSet { UserDefaults.standard.set(bookLookupProviderOrder, forKey: "book_lookup.provider_order") }
+    }
+    @Published var isOverseasBookLookupEnabled: Bool = false {
+        didSet { UserDefaults.standard.set(isOverseasBookLookupEnabled, forKey: "book_lookup.overseas_enabled") }
+    }
 
     func load() {
         if let raw = UserDefaults.standard.string(forKey: "ui.display_mode"),
@@ -64,7 +82,19 @@ final class SettingsManager: ObservableObject {
         if aiTimeout == 0 { aiTimeout = 60 }
         aiMaxTokens = UserDefaults.standard.integer(forKey: "ai.max_tokens")
         if aiMaxTokens == 0 { aiMaxTokens = 2000 }
+        isJuheISBNEnabled = UserDefaults.standard.bool(forKey: "book_lookup.juhe_isbn_enabled")
+        isGuguISBNEnabled = UserDefaults.standard.bool(forKey: "book_lookup.gugu_isbn_enabled")
+        isJisuISBNEnabled = UserDefaults.standard.bool(forKey: "book_lookup.jisu_isbn_enabled")
+        isAIBookLookupEnabled = UserDefaults.standard.bool(forKey: "book_lookup.ai_isbn_enabled")
+        if let order = UserDefaults.standard.stringArray(forKey: "book_lookup.provider_order") {
+            let known = Set(BookLookupProviderKey.allCases.map(\.rawValue))
+            let retained = order.filter { known.contains($0) }
+            let missing = BookLookupProviderKey.defaultOrder.map(\.rawValue).filter { !retained.contains($0) }
+            bookLookupProviderOrder = retained + missing
+        }
+        isOverseasBookLookupEnabled = UserDefaults.standard.bool(forKey: "book_lookup.overseas_enabled")
     }
+
 }
 
 enum DisplayMode: String {
@@ -75,11 +105,33 @@ enum DisplayMode: String {
 enum SortField: String {
     case pinyin
     case firstLetter
+    case title
+    case publisher
     case createdAt
     case updatedAt
+    case favorite
+
+    var displayName: String {
+        switch self {
+        case .pinyin: return "书名拼音"
+        case .firstLetter: return "首字母"
+        case .title: return "书名"
+        case .publisher: return "出版社"
+        case .createdAt: return "收藏时间"
+        case .updatedAt: return "编辑时间"
+        case .favorite: return "收藏优先"
+        }
+    }
 }
 
 enum SortOrder: String {
     case ascending
     case descending
+
+    var displayName: String {
+        switch self {
+        case .ascending: return "升序"
+        case .descending: return "降序"
+        }
+    }
 }

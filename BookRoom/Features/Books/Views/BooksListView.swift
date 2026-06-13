@@ -5,6 +5,10 @@ struct BooksListView: View {
     @State private var searchText = ""
     @State private var books: [Book] = []
     @State private var isLoading = true
+    @State private var isLoadingNextPage = false
+    @State private var hasMoreBooks = true
+    @State private var currentOffset = 0
+    @State private var loadGeneration = 0
     @State private var displayMode: DisplayMode
     @State private var sortField: SortField
     @State private var sortOrder: SortOrder
@@ -15,6 +19,8 @@ struct BooksListView: View {
     @State private var selectedBooks: Set<String> = []
     @State private var isEditing = false
     @State private var showBatchActions = false
+
+    private let pageSize = 60
 
     init() {
         _displayMode = State(initialValue: AppContainer.shared.settings.displayMode)
@@ -58,6 +64,7 @@ struct BooksListView: View {
                             .disabled(selectedBooks.isEmpty)
                     } else {
                         HStack {
+                            sortMenu
                             Picker("", selection: $displayMode) {
                                 Image(systemName: "list.bullet").tag(DisplayMode.list)
                                 Image(systemName: "square.grid.2x2").tag(DisplayMode.grid)
@@ -71,15 +78,43 @@ struct BooksListView: View {
                     }
                 }
             }
-            .onChange(of: searchText) { _, _ in searchBooks() }
-            .task { await loadBooks() }
+            .onChange(of: searchText) { _, _ in
+                Task { await reloadBooks() }
+            }
+            .onChange(of: sortField) { _, newValue in
+                appContainer.settings.sortField = newValue
+                Task { await reloadBooks() }
+            }
+            .onChange(of: sortOrder) { _, newValue in
+                appContainer.settings.sortOrder = newValue
+                Task { await reloadBooks() }
+            }
+            .task { await reloadBooks() }
             .sheet(isPresented: $showFilterSheet) {
                 FilterSheetView(selectedShelfID: $filterShelfID, selectedTagID: $filterTagID,
-                    selectedReadingStatus: $filterReadingStatus, onApply: { searchBooks() })
+                    selectedReadingStatus: $filterReadingStatus, onApply: { Task { await reloadBooks() } })
             }
             .sheet(isPresented: $showBatchActions) {
                 BatchActionSheet(selectedBookIDs: Array(selectedBooks))
             }
+        }
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            Picker("排序字段", selection: $sortField) {
+                ForEach([SortField.createdAt, .updatedAt, .title, .publisher, .favorite], id: \.self) { field in
+                    Text(field.displayName).tag(field)
+                }
+            }
+
+            Picker("排序方向", selection: $sortOrder) {
+                ForEach([SortOrder.descending, .ascending], id: \.self) { order in
+                    Text(order.displayName).tag(order)
+                }
+            }
+        } label: {
+            Label("排序", systemImage: "arrow.up.arrow.down")
         }
     }
 
@@ -101,6 +136,10 @@ struct BooksListView: View {
                             NavigationLink(destination: BookDetailView(book: book)) { BookRowView(book: book) }
                         }
                     }
+
+                    if hasMoreBooks {
+                        nextPageLoader
+                    }
                 }
                 .listStyle(.plain)
             case .grid:
@@ -120,10 +159,33 @@ struct BooksListView: View {
                                 NavigationLink(destination: BookDetailView(book: book)) { BookCoverView(book: book) }
                             }
                         }
+
+                        if hasMoreBooks {
+                            nextPageLoader
+                                .gridCellColumns(2)
+                        }
                     }
                     .padding()
                 }
             }
+        }
+    }
+
+    private var nextPageLoader: some View {
+        HStack {
+            Spacer()
+            if isLoadingNextPage {
+                ProgressView()
+                    .padding(.vertical, 16)
+            } else {
+                ProgressView()
+                    .padding(.vertical, 16)
+                    .onAppear {
+                        let generation = loadGeneration
+                        Task { await loadNextPage(generation: generation) }
+                    }
+            }
+            Spacer()
         }
     }
 
@@ -161,48 +223,46 @@ struct BooksListView: View {
         filterTagID = nil
         filterReadingStatus = nil
         searchText = ""
-        Task { await loadBooks() }
+        Task { await reloadBooks() }
     }
 
     @MainActor
-    private func loadBooks() async {
+    private func reloadBooks() async {
         isLoading = true
+        books = []
+        currentOffset = 0
+        hasMoreBooks = true
+        isLoadingNextPage = false
+        loadGeneration += 1
+        let generation = loadGeneration
         defer { isLoading = false }
+        await loadNextPage(generation: generation)
+    }
+
+    @MainActor
+    private func loadNextPage(generation: Int) async {
+        guard hasMoreBooks, !isLoadingNextPage else { return }
+        isLoadingNextPage = true
+        defer { isLoadingNextPage = false }
+
         do {
-            let query = try await appContainer.bookRepo.fetchAll()
-            books = sortBooks(query)
+            let page = try await appContainer.bookRepo.fetchPage(
+                keyword: searchText,
+                shelfID: filterShelfID,
+                tagID: filterTagID,
+                readingStatus: filterReadingStatus,
+                sortField: sortField,
+                sortOrder: sortOrder,
+                limit: pageSize,
+                offset: currentOffset
+            )
+            guard generation == loadGeneration else { return }
+            books.append(contentsOf: page)
+            currentOffset += page.count
+            hasMoreBooks = page.count == pageSize
         } catch {
-            print("Failed to load books: \(error)")
-        }
-    }
-
-    private func searchBooks() {
-        guard !searchText.isEmpty else { Task { await loadBooks() }; return }
-        Task {
-            do {
-                let results = try await appContainer.searchRepo.searchWithLike(keyword: searchText)
-                books = sortBooks(results)
-            } catch {
-                print("Search failed: \(error)")
-            }
-        }
-    }
-
-    private func sortBooks(_ books: [Book]) -> [Book] {
-        let order = sortOrder == .ascending ? 1 : -1
-        return books.sorted { a, b in
-            switch sortField {
-            case .pinyin:
-                let ea = Pinyin.analyze(a.title)
-                let eb = Pinyin.analyze(b.title)
-                return ea.full < eb.full ? order == 1 : order == -1
-            case .firstLetter:
-                let ea = Pinyin.analyze(a.title)
-                let eb = Pinyin.analyze(b.title)
-                return ea.initials < eb.initials ? order == 1 : order == -1
-            case .createdAt: return a.createdAt < b.createdAt ? order == 1 : order == -1
-            case .updatedAt: return a.updatedAt < b.updatedAt ? order == 1 : order == -1
-            }
+            hasMoreBooks = false
+            print("Failed to load books page: \(error)")
         }
     }
 }

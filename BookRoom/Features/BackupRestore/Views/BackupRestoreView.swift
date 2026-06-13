@@ -8,6 +8,7 @@ struct BackupRestoreView: View {
     @State private var showRestoreMode = false
     @State private var selectedBackup: BackupInfo?
     @State private var isCreatingBackup = false
+    @State private var showBackupImporter = false
     @State private var showSuccess = false
     @State private var successMessage = ""
     @State private var showError = false
@@ -30,6 +31,12 @@ struct BackupRestoreView: View {
                     }
                 }
                 .disabled(isCreatingBackup)
+
+                Button {
+                    showBackupImporter = true
+                } label: {
+                    Label("导入备份文件", systemImage: "square.and.arrow.down")
+                }
 
                 Text("备份包含：数据库 + 封面图片 + JSON 导出 + manifest")
                     .font(.caption)
@@ -76,6 +83,13 @@ struct BackupRestoreView: View {
         }
         .navigationTitle("数据备份与恢复")
         .task { await loadBackups() }
+        .fileImporter(
+            isPresented: $showBackupImporter,
+            allowedContentTypes: [.zip],
+            allowsMultipleSelection: false
+        ) { result in
+            importBackup(result)
+        }
         .sheet(item: $selectedBackup) { backup in
             RestoreModeSheet(backup: backup, onComplete: { mode in
                 selectedBackup = nil
@@ -91,6 +105,42 @@ struct BackupRestoreView: View {
             Button("确定", role: .cancel) {}
         } message: {
             Text(errorMessage)
+        }
+    }
+
+    private func importBackup(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let sourceURL = urls.first else { return }
+            guard sourceURL.startAccessingSecurityScopedResource() else {
+                errorMessage = "无法访问备份文件"
+                showError = true
+                return
+            }
+            defer { sourceURL.stopAccessingSecurityScopedResource() }
+
+            do {
+                try AppPaths.ensureDirectories()
+                let destinationName = sourceURL.lastPathComponent.hasPrefix("library-backup-")
+                    ? sourceURL.lastPathComponent
+                    : "library-backup-imported-\(Int(Date().timeIntervalSince1970)).zip"
+                let destinationURL = AppPaths.backupsURL.appendingPathComponent(destinationName)
+                if FileManager.default.fileExists(atPath: destinationURL.path) {
+                    try FileManager.default.removeItem(at: destinationURL)
+                }
+                try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+                successMessage = "备份已导入：\(destinationURL.lastPathComponent)"
+                showSuccess = true
+                Task { await loadBackups() }
+            } catch {
+                errorMessage = "导入备份失败：\(error.localizedDescription)"
+                showError = true
+            }
+        case .failure(let error):
+            if (error as NSError).code != NSUserCancelledError {
+                errorMessage = error.localizedDescription
+                showError = true
+            }
         }
     }
 

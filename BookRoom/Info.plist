@@ -2,8 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>UIApplicationSceneManifest</key>
-    <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>BookRoom 需要使用相机扫描图书 ISBN 条形码或拍摄图书封面。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>BookRoom 需要读取您选择的图片，用于更新图书封面。</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
         <key>UIApplicationSupportsMultipleScenes</key>
         <false/>
         <key>UISceneConfigurations</key>

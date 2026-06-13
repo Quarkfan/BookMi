@@ -14,6 +14,61 @@ final class BookRepository {
         }
     }
 
+    func fetchPage(
+        keyword: String = "",
+        shelfID: String? = nil,
+        tagID: String? = nil,
+        readingStatus: ReadingStatus? = nil,
+        sortField: SortField = .createdAt,
+        sortOrder: SortOrder = .descending,
+        limit: Int,
+        offset: Int
+    ) async throws -> [Book] {
+        try await dbQueue.read { (db: Database) in
+            var joins: [String] = []
+            var conditions = ["b.deleted_at IS NULL"]
+            var args: [(any DatabaseValueConvertible)?] = []
+
+            if !keyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                joins.append("LEFT JOIN search_index si ON b.id = si.book_id")
+                let kw = "%\(keyword.lowercased())%"
+                conditions.append("""
+                    (LOWER(b.title) LIKE ? OR LOWER(COALESCE(si.normalized_authors, '')) LIKE ?
+                    OR LOWER(COALESCE(b.publisher, '')) LIKE ? OR LOWER(COALESCE(b.isbn10, '')) LIKE ?
+                    OR LOWER(COALESCE(b.isbn13, '')) LIKE ? OR LOWER(COALESCE(si.combined_search_text, '')) LIKE ?)
+                    """)
+                args.append(contentsOf: [kw, kw, kw, kw, kw, kw])
+            }
+
+            if let shelfID {
+                conditions.append("b.shelf_id = ?")
+                args.append(shelfID)
+            }
+
+            if let tagID {
+                joins.append("INNER JOIN book_tags bt ON b.id = bt.book_id")
+                conditions.append("bt.tag_id = ?")
+                args.append(tagID)
+            }
+
+            if let readingStatus {
+                conditions.append("b.reading_status = ?")
+                args.append(readingStatus.rawValue)
+            }
+
+            let sql = """
+                SELECT DISTINCT b.* FROM books b
+                \(joins.joined(separator: "\n"))
+                WHERE \(conditions.joined(separator: " AND "))
+                ORDER BY \(orderClause(field: sortField, order: sortOrder))
+                LIMIT ? OFFSET ?
+                """
+            args.append(limit)
+            args.append(offset)
+            return try Book.fetchAll(db, sql: sql, arguments: StatementArguments(args))
+        }
+    }
+
     func fetchCount(excludeDeleted: Bool = true) async throws -> Int {
         try await dbQueue.read { (db: Database) in
             var q = Book.all()
@@ -187,6 +242,22 @@ extension BookRepository {
         if c.count == 13 { return (nil, c) }
         if c.count == 10 { return (c, nil) }
         return (nil, nil)
+    }
+}
+
+private func orderClause(field: SortField, order: SortOrder) -> String {
+    let direction = order == .ascending ? "ASC" : "DESC"
+    switch field {
+    case .pinyin, .firstLetter, .title:
+        return "LOWER(b.title) \(direction), b.created_at DESC"
+    case .publisher:
+        return "LOWER(COALESCE(b.publisher, '')) \(direction), b.created_at DESC"
+    case .createdAt:
+        return "b.created_at \(direction)"
+    case .updatedAt:
+        return "b.updated_at \(direction)"
+    case .favorite:
+        return "b.is_favorite DESC, b.created_at DESC"
     }
 }
 

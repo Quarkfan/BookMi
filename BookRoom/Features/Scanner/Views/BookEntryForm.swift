@@ -2,9 +2,44 @@ import SwiftUI
 import GRDB
 
 /// Book entry form - used after scanning, searching, or for manual entry
+enum BookEntryMode {
+    case manual
+    case searchResult
+    case scannedISBN
+    case edit
+
+    var title: String {
+        switch self {
+        case .manual: return "手动录入"
+        case .searchResult: return "确认添加"
+        case .scannedISBN: return "扫码结果"
+        case .edit: return "编辑图书"
+        }
+    }
+
+    var primaryActionTitle: String {
+        switch self {
+        case .manual: return "保存"
+        case .searchResult, .scannedISBN: return "添加到藏书"
+        case .edit: return "保存修改"
+        }
+    }
+
+    var sourceLabel: String {
+        switch self {
+        case .manual: return "手动录入"
+        case .searchResult: return "来自网络搜索"
+        case .scannedISBN: return "来自 ISBN 扫码"
+        case .edit: return "现有藏书"
+        }
+    }
+}
+
 struct BookEntryForm: View {
     let initialData: BookMetadataDraft?
+    let mode: BookEntryMode
     let onSave: (BookMetadataDraft) -> Void
+    let onSaveManagement: ((String?, [String], String?) -> Void)?
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var appContainer: AppContainer
 
@@ -25,14 +60,56 @@ struct BookEntryForm: View {
     @State private var showError = false
     @State private var errorMessage = ""
 
-    init(initialData: BookMetadataDraft? = nil, onSave: @escaping (BookMetadataDraft) -> Void) {
+    init(
+        initialData: BookMetadataDraft? = nil,
+        mode: BookEntryMode = .manual,
+        initialShelfID: String? = nil,
+        initialTagIDs: [String] = [],
+        initialChannelID: String? = nil,
+        onSaveManagement: ((String?, [String], String?) -> Void)? = nil,
+        onSave: @escaping (BookMetadataDraft) -> Void
+    ) {
         self.initialData = initialData
+        self.mode = mode
+        self.onSaveManagement = onSaveManagement
         self.onSave = onSave
+        _selectedShelfID = State(initialValue: initialShelfID)
+        _selectedTags = State(initialValue: initialTagIDs)
+        _selectedChannelID = State(initialValue: initialChannelID)
     }
 
     var body: some View {
         NavigationView {
             Form {
+                if initialData != nil {
+                    Section {
+                        HStack(alignment: .top, spacing: 14) {
+                            BookCoverThumbnail(coverURL: initialData?.coverURL)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(mode.sourceLabel)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                Text(title.isEmpty ? "等待图书信息" : title)
+                                    .font(.headline)
+                                if !authors.isEmpty {
+                                    Text(authors)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+                                if let source = initialData?.dataSource {
+                                    Text("数据源：\(sourceDisplayName(source))")
+                                        .font(.caption)
+                                        .foregroundStyle(Color(red: 0.16, green: 0.38, blue: 0.30))
+                                }
+                            }
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                    } footer: {
+                        Text(mode == .edit ? "修改后会更新当前藏书，不会新增副本。" : "请确认图书信息和管理信息，必要时可以修改后再添加。")
+                    }
+                }
+
                 // Basic Info
                 Section("基本信息") {
                     TextField("书名 *", text: $title)
@@ -73,13 +150,13 @@ struct BookEntryForm: View {
 
                 // Save button
                 Section {
-                    Button(isSaving ? "保存中..." : "保存") {
+                    Button(isSaving ? "保存中..." : mode.primaryActionTitle) {
                         saveBook()
                     }
                     .disabled(title.isEmpty || isSaving)
                 }
             }
-            .navigationTitle(initialData != nil ? "确认图书信息" : "手动录入")
+            .navigationTitle(mode.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -106,10 +183,11 @@ struct BookEntryForm: View {
         price = draft.price ?? ""
         summary = draft.summary ?? ""
 
-        // Apply default shelf and tags from settings
-        selectedShelfID = appContainer.settings.defaultShelfID
-        selectedTags = appContainer.settings.defaultTagIDs
-        selectedChannelID = appContainer.settings.defaultPurchaseChannelID
+        if mode != .edit {
+            selectedShelfID = appContainer.settings.defaultShelfID
+            selectedTags = appContainer.settings.defaultTagIDs
+            selectedChannelID = appContainer.settings.defaultPurchaseChannelID
+        }
     }
 
     // MARK: - Save
@@ -139,8 +217,22 @@ struct BookEntryForm: View {
             rawJSON: initialData?.rawJSON
         )
 
+        onSaveManagement?(selectedShelfID, selectedTags, selectedChannelID)
         onSave(draft)
         isSaving = false
+    }
+
+    private func sourceDisplayName(_ source: String) -> String {
+        switch source {
+        case "openlibrary": return "Open Library"
+        case "googlebooks": return "Google Books"
+        case "juhe_isbn": return "聚合数据 ISBN"
+        case "gugu_isbn": return "咕咕数据 ISBN"
+        case "jisu_isbn": return "极速数据 ISBN"
+        case "ai_isbn": return "AI ISBN 查询"
+        case "manual": return "手动录入"
+        default: return source
+        }
     }
 }
 

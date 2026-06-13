@@ -63,8 +63,8 @@ final class CSVServiceTests: DatabaseTestCase {
     // MARK: - Export Tests
 
     func testExportToCSV() async throws {
-        try await createBook(title: "三体", authors: ["刘慈欣"], isbn13: "9787536692930")
-        try await createBook(title: "流浪地球", authors: ["刘慈欣"])
+        _ = try await createBook(title: "三体", authors: ["刘慈欣"], isbn13: "9787536692930")
+        _ = try await createBook(title: "流浪地球", authors: ["刘慈欣"])
 
         let fields: [CSVField] = [.title, .authors, .isbn13]
         let url = try await CSVService.exportBooks(
@@ -90,7 +90,7 @@ final class CSVServiceTests: DatabaseTestCase {
     }
 
     func testExportAllFields() async throws {
-        try await createBook(title: "测试书")
+        _ = try await createBook(title: "测试书")
 
         let url = try await CSVService.exportBooks(
             books: try await bookRepo.fetchAll(),
@@ -107,6 +107,22 @@ final class CSVServiceTests: DatabaseTestCase {
     }
 
     // MARK: - Import Tests
+
+    func testParseCSVHandlesQuotedCommasQuotesAndNewlines() {
+        let csvContent = """
+        书名,作者,简介
+        "书, 一号","作者A","他说""很好""
+        还能换行"
+        """
+
+        let rows = CSVService.parseCSV(csvContent)
+
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertEqual(rows[0], ["书名", "作者", "简介"])
+        XCTAssertEqual(rows[1][0], "书, 一号")
+        XCTAssertEqual(rows[1][1], "作者A")
+        XCTAssertEqual(rows[1][2], "他说\"很好\"\n还能换行")
+    }
 
     func testImportFromCSV() async throws {
         // Create a CSV file

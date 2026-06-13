@@ -83,6 +83,7 @@ struct CSVImportView: View {
     @EnvironmentObject var appContainer: AppContainer
 
     @State private var selectedFileURL: URL?
+    @State private var showFilePicker = false
     @State private var fieldMapping: [String: CSVField] = [:]
     @State private var headers: [String] = []
     @State private var previewRows: [[String]] = []
@@ -113,9 +114,7 @@ struct CSVImportView: View {
                 if selectedFileURL == nil {
                     Section("选择文件") {
                         Button("选择 CSV 文件") {
-                            // In a real app, use .fileImporter
-                            // For now, simulate with a test file
-                            loadSampleCSV()
+                            showFilePicker = true
                         }
                     }
                 } else {
@@ -152,8 +151,8 @@ struct CSVImportView: View {
                     }
 
                     Section("预览") {
-                        ForEach(previewRows.prefix(3).enumerated(), id: \.offset) { i, row in
-                            Text(row.joined(separator: " | "))
+                        ForEach(previewRows.indices, id: \.self) { index in
+                            Text(previewRows[index].joined(separator: " | "))
                                 .font(.caption2)
                         }
                     }
@@ -178,6 +177,43 @@ struct CSVImportView: View {
             } message: {
                 Text(errorMessage)
             }
+            .fileImporter(
+                isPresented: $showFilePicker,
+                allowedContentTypes: [.commaSeparatedText, .plainText],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    guard let url = urls.first else { return }
+                    // Start accessing the security-scoped resource
+                    guard url.startAccessingSecurityScopedResource() else {
+                        errorMessage = "无法访问文件"
+                        showError = true
+                        return
+                    }
+                    defer { url.stopAccessingSecurityScopedResource() }
+
+                    // Copy to app's temp directory for persistent access
+                    let tempURL = AppPaths.tempImportURL.appendingPathComponent(url.lastPathComponent)
+                    do {
+                        try AppPaths.ensureDirectories()
+                        if FileManager.default.fileExists(atPath: tempURL.path) {
+                            try FileManager.default.removeItem(at: tempURL)
+                        }
+                        try FileManager.default.copyItem(at: url, to: tempURL)
+                        selectedFileURL = tempURL
+                        parseHeaders()
+                    } catch {
+                        errorMessage = "读取文件失败：\(error.localizedDescription)"
+                        showError = true
+                    }
+                case .failure(let error):
+                    if (error as NSError).code != NSUserCancelledError {
+                        errorMessage = error.localizedDescription
+                        showError = true
+                    }
+                }
+            }
         }
     }
 
@@ -192,30 +228,15 @@ struct CSVImportView: View {
         )
     }
 
-    private func loadSampleCSV() {
-        let sampleContent = """
-        书名,作者,ISBN-13,出版社,出版日期,页数,定价
-        三体,刘慈欣,9787536692930,重庆出版社,2008-01,302,23.00
-        三体Ⅱ：黑暗森林,刘慈欣,9787536698628,重庆出版社,2008-05,351,32.00
-        活着,余华,9787506365437,作家出版社,2012-08,191,20.00
-        """
-        let tempURL = AppPaths.tempImportURL.appendingPathComponent("sample_import.csv")
-        try? sampleContent.write(to: tempURL, atomically: true, encoding: .utf8)
-        selectedFileURL = tempURL
-        parseHeaders()
-    }
-
     private func parseHeaders() {
         guard let url = selectedFileURL,
               let content = try? String(contentsOf: url, encoding: .utf8) else { return }
 
-        let lines = content.split(omittingEmptySubsequences: true) { $0.isNewline }
-        guard let headerLine = lines.first else { return }
+        let rows = CSVService.parseCSV(content)
+        guard let headerRow = rows.first else { return }
 
-        headers = headerLine.split(separator: ",").map(String.init)
-        previewRows = lines.dropFirst().prefix(3).map { line in
-            line.split(separator: ",").map(String.init)
-        }
+        headers = headerRow.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        previewRows = Array(rows.dropFirst().prefix(3))
 
         // Auto-map based on common header names
         let autoMap: [String: CSVField] = [
@@ -232,9 +253,8 @@ struct CSVImportView: View {
         ]
 
         for header in headers {
-            let trimmed = header.trimmingCharacters(in: .whitespaces)
-            if let field = autoMap[trimmed] {
-                fieldMapping[trimmed] = field
+            if let field = autoMap[header] {
+                fieldMapping[header] = field
             }
         }
     }

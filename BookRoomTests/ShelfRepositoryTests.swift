@@ -54,7 +54,6 @@ final class ShelfRepositoryTests: DatabaseTestCase {
         XCTAssertNil(updatedBook?.shelfID)
 
         // Shelf should be soft-deleted
-        let fetchedShelf = try await shelfRepo.fetch(byID: saved.id)
         // It's deleted, so fetchAll won't return it
         let all = try await shelfRepo.fetchAll()
         XCTAssertFalse(all.contains { $0.id == saved.id })
@@ -64,9 +63,9 @@ final class ShelfRepositoryTests: DatabaseTestCase {
         let shelf = createShelf(name: "书房柜")
         try await shelfRepo.insert(shelf)
 
-        let book1 = createBook(title: "Book 1")
+        var book1 = createBook(title: "Book 1")
         book1.shelfID = shelf.id
-        let book2 = createBook(title: "Book 2")
+        var book2 = createBook(title: "Book 2")
         book2.shelfID = shelf.id
         try await bookRepo.insert(book1)
         try await bookRepo.insert(book2)

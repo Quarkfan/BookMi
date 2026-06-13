@@ -86,9 +86,9 @@ final class BookRepositoryTests: DatabaseTestCase {
     }
 
     func testBatchMarkFinished() async throws {
-        let book1 = createBook(title: "Reading 1")
+        var book1 = createBook(title: "Reading 1")
         book1.readingStatus = .reading
-        let book2 = createBook(title: "Reading 2")
+        var book2 = createBook(title: "Reading 2")
         book2.readingStatus = .reading
         try await bookRepo.insert(book1)
         try await bookRepo.insert(book2)
@@ -112,9 +112,7 @@ final class BookRepositoryTests: DatabaseTestCase {
             updatedAt: ISO8601DateFormatter().string(from: Date()),
             deletedAt: nil
         )
-        try await dbQueue.write { db in
-            try shelf.insert(db)
-        }
+        try await shelfRepo.insert(shelf)
 
         let book1 = createBook(title: "Book X")
         let book2 = createBook(title: "Book Y")
@@ -131,9 +129,9 @@ final class BookRepositoryTests: DatabaseTestCase {
 
     func testCountByReadingStatus() async throws {
         let unread = createBook(title: "Unread")
-        let reading = createBook(title: "Reading")
+        var reading = createBook(title: "Reading")
         reading.readingStatus = .reading
-        let finished = createBook(title: "Finished")
+        var finished = createBook(title: "Finished")
         finished.readingStatus = .finished
         try await bookRepo.insert(unread)
         try await bookRepo.insert(reading)
@@ -149,7 +147,7 @@ final class BookRepositoryTests: DatabaseTestCase {
 
     func testCountByYear() async throws {
         let now = ISO8601DateFormatter().string(from: Date())
-        let book = createBook(title: "New Book")
+        var book = createBook(title: "New Book")
         book.createdAt = now
         try await bookRepo.insert(book)
 
@@ -168,11 +166,9 @@ final class BookRepositoryTests: DatabaseTestCase {
             updatedAt: ISO8601DateFormatter().string(from: Date()),
             deletedAt: nil
         )
-        try await dbQueue.write { db in
-            try shelf.insert(db)
-        }
+        try await shelfRepo.insert(shelf)
 
-        let book1 = createBook(title: "Book 1")
+        var book1 = createBook(title: "Book 1")
         book1.shelfID = shelf.id
         let book2 = createBook(title: "Book 2")
         try await bookRepo.insert(book1)

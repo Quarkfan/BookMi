@@ -12,7 +12,7 @@ struct MainTabView: View {
 
             ShelvesListView()
                 .tabItem {
-                    Label("书柜", systemImage: "shelf")
+                    Label("书柜", systemImage: "archivebox")
                 }
 
             AddBookView()

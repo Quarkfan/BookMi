@@ -190,63 +190,27 @@ struct StatisticsView: View {
     // MARK: - Author Chart
 
     private var authorChart: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("作者 TOP 10")
-                .font(.headline)
-
-            if authorStats.isEmpty {
-                Text("暂无数据")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(authorStats.prefix(10), id: \.name) { item in
-                    HStack {
-                        Text(item.name)
-                            .font(.subheadline)
-                            .frame(width: 120, alignment: .leading)
-                            .lineLimit(1)
-
-                        Text("\(item.count)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        TopRankCard(
+            title: "作者 TOP 10",
+            subtitle: "谁在你的书架上反复出现",
+            icon: "person.text.rectangle.fill",
+            tint: .indigo,
+            total: totalBooks,
+            items: Array(authorStats.prefix(10))
+        )
     }
 
     // MARK: - Publisher Chart
 
     private var publisherChart: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("出版社 TOP 10")
-                .font(.headline)
-
-            if publisherStats.isEmpty {
-                Text("暂无数据")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(publisherStats.prefix(10), id: \.name) { item in
-                    HStack {
-                        Text(item.name)
-                            .font(.subheadline)
-                            .frame(width: 120, alignment: .leading)
-                            .lineLimit(1)
-
-                        Text("\(item.count)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        TopRankCard(
+            title: "出版社 TOP 10",
+            subtitle: "你的采购偏好和内容来源",
+            icon: "building.columns.fill",
+            tint: .teal,
+            total: totalBooks,
+            items: Array(publisherStats.prefix(10))
+        )
     }
 
     // MARK: - Channel Chart
@@ -426,6 +390,142 @@ struct StatCard: View {
         .frame(maxWidth: .infinity)
         .padding()
         .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Top Rank Card
+
+struct TopRankCard: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let tint: Color
+    let total: Int
+    let items: [(name: String, count: Int)]
+
+    private var maxCount: Int {
+        max(items.map(\.count).max() ?? 1, 1)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(tint.gradient)
+                    Image(systemName: icon)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 42, height: 42)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.headline)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+            }
+
+            if items.isEmpty {
+                Text("暂无数据")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 12)
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                        TopRankRow(
+                            rank: index + 1,
+                            name: item.name,
+                            count: item.count,
+                            total: total,
+                            maxCount: maxCount,
+                            tint: tint
+                        )
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(Color(.secondarySystemBackground))
+                .overlay(alignment: .topTrailing) {
+                    Circle()
+                        .fill(tint.opacity(0.13))
+                        .frame(width: 120, height: 120)
+                        .offset(x: 45, y: -55)
+                }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+    }
+}
+
+struct TopRankRow: View {
+    let rank: Int
+    let name: String
+    let count: Int
+    let total: Int
+    let maxCount: Int
+    let tint: Color
+
+    private var widthRatio: Double {
+        Double(count) / Double(max(maxCount, 1))
+    }
+
+    private var percentage: Double {
+        guard total > 0 else { return 0 }
+        return Double(count) / Double(total) * 100
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Text("\(rank)")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(rank <= 3 ? .white : tint)
+                    .frame(width: 26, height: 26)
+                    .background(rank <= 3 ? tint : tint.opacity(0.14))
+                    .clipShape(Circle())
+
+                Text(name)
+                    .font(.subheadline)
+                    .fontWeight(rank <= 3 ? .semibold : .regular)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Text("\(count) 本")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+
+                Text(String(format: "%.1f%%", percentage))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 46, alignment: .trailing)
+            }
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color(.tertiarySystemFill))
+                    Capsule()
+                        .fill(tint.gradient)
+                        .frame(width: max(8, proxy.size.width * widthRatio))
+                }
+            }
+            .frame(height: 7)
+        }
+        .padding(10)
+        .background(Color(.tertiarySystemBackground).opacity(rank <= 3 ? 1 : 0.65))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }

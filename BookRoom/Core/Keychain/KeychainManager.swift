@@ -21,6 +21,44 @@ final class KeychainManager {
         delete(key: "com.bookroom.llm-api-key")
     }
 
+    // MARK: - Book Lookup API Keys
+
+    func getJuheISBNAPIKey() -> String? {
+        get(key: "com.bookroom.juhe-isbn-api-key")
+    }
+
+    func setJuheISBNAPIKey(_ key: String) -> Bool {
+        set(key: "com.bookroom.juhe-isbn-api-key", value: key)
+    }
+
+    func deleteJuheISBNAPIKey() {
+        delete(key: "com.bookroom.juhe-isbn-api-key")
+    }
+
+    func getGuguISBNAppKey() -> String? {
+        get(key: "com.bookroom.gugu-isbn-appkey")
+    }
+
+    func setGuguISBNAppKey(_ key: String) -> Bool {
+        set(key: "com.bookroom.gugu-isbn-appkey", value: key)
+    }
+
+    func deleteGuguISBNAppKey() {
+        delete(key: "com.bookroom.gugu-isbn-appkey")
+    }
+
+    func getJisuISBNAppKey() -> String? {
+        get(key: "com.bookroom.jisu-isbn-appkey")
+    }
+
+    func setJisuISBNAppKey(_ key: String) -> Bool {
+        set(key: "com.bookroom.jisu-isbn-appkey", value: key)
+    }
+
+    func deleteJisuISBNAppKey() {
+        delete(key: "com.bookroom.jisu-isbn-appkey")
+    }
+
     // MARK: - Passcode Hash
 
     func getPasscodeHash() -> String? {

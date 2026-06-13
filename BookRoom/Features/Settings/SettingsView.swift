@@ -29,6 +29,9 @@ struct SettingsView: View {
                     NavigationLink("默认购买渠道") {
                         DefaultChannelSettingView()
                     }
+                    NavigationLink("图书数据源") {
+                        BookLookupSettingsView()
+                    }
                 }
 
                 // AI / OCR
@@ -130,6 +133,219 @@ struct SettingsView: View {
             } catch {
                 print("Failed to rebuild pinyin index: \(error)")
             }
+        }
+    }
+}
+
+// MARK: - Book Lookup Settings
+
+struct BookLookupSettingsView: View {
+    @EnvironmentObject var appContainer: AppContainer
+    @State private var juheEnabled = false
+    @State private var juheKey = ""
+    @State private var jisuEnabled = false
+    @State private var jisuKey = ""
+    @State private var guguEnabled = false
+    @State private var guguKey = ""
+    @State private var aiISBNEnabled = false
+    @State private var overseasEnabled = false
+    @State private var providerOrder = BookLookupProviderKey.defaultOrder
+    @State private var showKey = false
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("启用极速数据 ISBN", isOn: $jisuEnabled)
+                    .onChange(of: jisuEnabled) { _, newValue in
+                        appContainer.settings.isJisuISBNEnabled = newValue
+                    }
+
+                HStack {
+                    if showKey {
+                        TextField("极速数据 AppKey", text: $jisuKey)
+                    } else {
+                        SecureField("极速数据 AppKey", text: $jisuKey)
+                    }
+                    Button {
+                        showKey.toggle()
+                    } label: {
+                        Image(systemName: showKey ? "eye.slash" : "eye")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .onChange(of: jisuKey) { _, newValue in
+                    if newValue.isEmpty {
+                        appContainer.keychain.deleteJisuISBNAppKey()
+                    } else {
+                        _ = appContainer.keychain.setJisuISBNAppKey(newValue)
+                    }
+                }
+            } header: {
+                Text("中文搜索优先")
+            } footer: {
+                Text("极速数据支持书名关键词搜索和 ISBN 查询，价格更适合个人小次数使用，建议作为默认中文搜索源。")
+            }
+
+            Section {
+                Toggle("启用咕咕数据 ISBN", isOn: $guguEnabled)
+                    .onChange(of: guguEnabled) { _, newValue in
+                        appContainer.settings.isGuguISBNEnabled = newValue
+                    }
+
+                HStack {
+                    if showKey {
+                        TextField("咕咕数据 AppKey", text: $guguKey)
+                    } else {
+                        SecureField("咕咕数据 AppKey", text: $guguKey)
+                    }
+                    Button {
+                        showKey.toggle()
+                    } label: {
+                        Image(systemName: showKey ? "eye.slash" : "eye")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .onChange(of: guguKey) { _, newValue in
+                    if newValue.isEmpty {
+                        appContainer.keychain.deleteGuguISBNAppKey()
+                    } else {
+                        _ = appContainer.keychain.setGuguISBNAppKey(newValue)
+                    }
+                }
+            } header: {
+                Text("高覆盖付费源")
+            } footer: {
+                Text("咕咕数据也支持 ISBN 和关键词参数，但价格偏企业化；个人使用可先关闭。")
+            }
+
+            Section {
+                Toggle("启用聚合数据 ISBN", isOn: $juheEnabled)
+                    .onChange(of: juheEnabled) { _, newValue in
+                        appContainer.settings.isJuheISBNEnabled = newValue
+                    }
+
+                HStack {
+                    if showKey {
+                        TextField("聚合数据 API Key", text: $juheKey)
+                    } else {
+                        SecureField("聚合数据 API Key", text: $juheKey)
+                    }
+                    Button {
+                        showKey.toggle()
+                    } label: {
+                        Image(systemName: showKey ? "eye.slash" : "eye")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .onChange(of: juheKey) { _, newValue in
+                    if newValue.isEmpty {
+                        appContainer.keychain.deleteJuheISBNAPIKey()
+                    } else {
+                        _ = appContainer.keychain.setJuheISBNAPIKey(newValue)
+                    }
+                }
+            } header: {
+                Text("扫码 ISBN 兜底")
+            } footer: {
+                Text("聚合数据适合 ISBN 查询，主要用于扫码后的图书信息获取。")
+            }
+
+            Section {
+                Toggle("启用海外数据源兜底", isOn: $overseasEnabled)
+                    .onChange(of: overseasEnabled) { _, newValue in
+                        appContainer.settings.isOverseasBookLookupEnabled = newValue
+                    }
+            } header: {
+                Text("海外源")
+            } footer: {
+                Text("Open Library 和 Google Books 在中国境内可能无法访问或很慢。默认关闭，只有需要国际图书兜底时再启用。")
+            }
+
+            Section {
+                Toggle("启用 AI ISBN 查询", isOn: $aiISBNEnabled)
+                    .onChange(of: aiISBNEnabled) { _, newValue in
+                        appContainer.settings.isAIBookLookupEnabled = newValue
+                        if newValue {
+                            // AI ISBN is a concrete AI capability; enabling it should not require
+                            // the user to discover and toggle a second master switch elsewhere.
+                            appContainer.settings.isAICapabilityEnabled = true
+                        }
+                    }
+            } header: {
+                Text("AI 兜底")
+            } footer: {
+                Text("复用「AI / OCR 设置」中的模型配置。模型会调度 App 提供的百度检索、网页读取、开放 ISBN 查询和图片验证工具；仅接受 ISBN 完全一致且带来源的结果。模型接口需支持 Tool Calling。")
+            }
+
+            Section("当前顺序") {
+                ForEach(providerOrder) { provider in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(provider.displayName)
+                            Text(provider.detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if let status = providerUnavailableReason(provider) {
+                            Text(status)
+                                .font(.caption)
+                                .foregroundStyle(status == "未启用" ? Color.secondary.opacity(0.55) : Color.orange)
+                        }
+                    }
+                }
+                .onMove { source, destination in
+                    providerOrder.move(fromOffsets: source, toOffset: destination)
+                    appContainer.settings.bookLookupProviderOrder = providerOrder.map(\.rawValue)
+                }
+            }
+        }
+        .navigationTitle("图书数据源")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            EditButton()
+        }
+        .task {
+            juheEnabled = appContainer.settings.isJuheISBNEnabled
+            juheKey = appContainer.keychain.getJuheISBNAPIKey() ?? ""
+            jisuEnabled = appContainer.settings.isJisuISBNEnabled
+            jisuKey = appContainer.keychain.getJisuISBNAppKey() ?? ""
+            guguEnabled = appContainer.settings.isGuguISBNEnabled
+            guguKey = appContainer.keychain.getGuguISBNAppKey() ?? ""
+            aiISBNEnabled = appContainer.settings.isAIBookLookupEnabled
+            overseasEnabled = appContainer.settings.isOverseasBookLookupEnabled
+            providerOrder = appContainer.settings.bookLookupProviderOrder.compactMap(BookLookupProviderKey.init(rawValue:))
+        }
+    }
+
+    private func providerUnavailableReason(_ provider: BookLookupProviderKey) -> String? {
+        switch provider {
+        case .jisu:
+            if !jisuEnabled { return "未启用" }
+            return jisuKey.isEmpty ? "缺少 AppKey" : nil
+        case .gugu:
+            if !guguEnabled { return "未启用" }
+            return guguKey.isEmpty ? "缺少 AppKey" : nil
+        case .juhe:
+            if !juheEnabled { return "未启用" }
+            return juheKey.isEmpty ? "缺少 API Key" : nil
+        case .aiISBN:
+            if !aiISBNEnabled { return "未启用" }
+            if !appContainer.settings.isAICapabilityEnabled { return "AI 总开关关闭" }
+            if appContainer.settings.aiBaseURL?.nilIfEmpty == nil
+                || appContainer.settings.aiModelName?.nilIfEmpty == nil
+                || appContainer.keychain.getLLMAPIKey()?.nilIfEmpty == nil {
+                return "缺少模型配置"
+            }
+            return nil
+        case .openLibrary, .googleBooks:
+            return overseasEnabled ? nil : "未启用"
         }
     }
 }

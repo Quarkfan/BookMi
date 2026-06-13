@@ -12,7 +12,6 @@ struct AIOCRSettingsView: View {
     @State private var isTesting = false
     @State private var testResult: String?
     @State private var showAPIKey = false
-
     var body: some View {
         Form {
             Section {
@@ -122,7 +121,6 @@ struct AIOCRSettingsView: View {
         modelName = appContainer.settings.aiModelName ?? ""
         timeout = String(appContainer.settings.aiTimeout)
         maxTokens = String(appContainer.settings.aiMaxTokens)
-
         if let key = appContainer.keychain.getLLMAPIKey() {
             apiKey = key
         }
@@ -181,4 +179,5 @@ struct AIOCRSettingsView: View {
             }
         }
     }
+
 }

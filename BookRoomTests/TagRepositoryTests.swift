@@ -30,8 +30,12 @@ final class TagRepositoryTests: DatabaseTestCase {
         try await tagRepo.insert(tag1)
 
         let tag2 = createTag(name: "UniqueTag")
-        // Should fail due to unique constraint
-        XCTAssertThrowsError(try await tagRepo.insert(tag2))
+        do {
+            _ = try await tagRepo.insert(tag2)
+            XCTFail("Expected duplicate tag insertion to throw")
+        } catch {
+            // Expected: tag names are unique.
+        }
     }
 
     func testGetOrCreate() async throws {

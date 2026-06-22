@@ -1,5 +1,7 @@
 import SwiftUI
 import GRDB
+import UIKit
+import CryptoKit
 
 struct SettingsView: View {
     @EnvironmentObject var appContainer: AppContainer
@@ -528,12 +530,17 @@ struct DataQualityView: View {
                     Text("\(missingISBN)")
                         .foregroundStyle(missingISBN > 0 ? .orange : .secondary)
                 }
-                HStack {
-                    Text("缺失封面")
-                    Spacer()
-                    Text("\(missingCover)")
-                        .foregroundStyle(missingCover > 0 ? .orange : .secondary)
+                NavigationLink {
+                    MissingCoverBooksView(onUpdate: loadMetrics)
+                } label: {
+                    HStack {
+                        Text("缺失封面")
+                        Spacer()
+                        Text("\(missingCover)")
+                            .foregroundStyle(missingCover > 0 ? .orange : .secondary)
+                    }
                 }
+                .disabled(missingCover == 0)
                 HStack {
                     Text("未设置书柜")
                     Spacer()
@@ -543,16 +550,187 @@ struct DataQualityView: View {
             }
         }
         .navigationTitle("数据质量检查")
-        .task {
-            do {
-                let books = try await appContainer.bookRepo.fetchAll()
-                missingISBN = books.filter { $0.isbn13 == nil && $0.isbn10 == nil }.count
-                missingCover = books.filter { $0.coverFileName == nil }.count
-                missingShelf = books.filter { $0.shelfID == nil }.count
-            } catch {
-                print("Failed to calculate quality metrics: \(error)")
+        .task { await loadMetrics() }
+        .refreshable { await loadMetrics() }
+    }
+
+    @MainActor
+    private func loadMetrics() async {
+        do {
+            async let isbn = appContainer.bookRepo.countMissingISBN()
+            async let cover = appContainer.bookRepo.countMissingCovers()
+            async let shelf = appContainer.bookRepo.countMissingShelf()
+            missingISBN = try await isbn
+            missingCover = try await cover
+            missingShelf = try await shelf
+        } catch {
+            print("Failed to calculate quality metrics: \(error)")
+        }
+    }
+}
+
+struct MissingCoverBooksView: View {
+    @EnvironmentObject var appContainer: AppContainer
+    let onUpdate: () async -> Void
+
+    @State private var books: [Book] = []
+    @State private var selectedBook: Book?
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Group {
+            if isLoading {
+                ProgressView("正在加载缺失封面的图书…")
+            } else if books.isEmpty {
+                ContentUnavailableView(
+                    "没有缺失封面的书",
+                    systemImage: "checkmark.seal",
+                    description: Text("这一项已经清空了，很舒服。")
+                )
+            } else {
+                List {
+                    Section {
+                        ForEach(books) { book in
+                            MissingCoverBookRow(book: book) {
+                                selectedBook = book
+                            }
+                        }
+                    } header: {
+                        Text("共 \(books.count) 本待补封面")
+                    } footer: {
+                        Text("更新成功后，这本书会自动从列表中移除。")
+                    }
+                }
+                .listStyle(.insetGrouped)
             }
         }
+        .navigationTitle("缺失封面")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task { await loadBooks() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .disabled(isLoading)
+            }
+        }
+        .task { await loadBooks() }
+        .refreshable { await loadBooks() }
+        .sheet(item: $selectedBook) { book in
+            CoverEditorSheet(book: book) { image in
+                await saveCover(image, for: book)
+            }
+        }
+        .alert("加载失败", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    @MainActor
+    private func loadBooks() async {
+        isLoading = true
+        do {
+            books = try await appContainer.bookRepo.fetchMissingCovers()
+            errorMessage = nil
+        } catch {
+            errorMessage = "暂时无法读取缺失封面的图书，请稍后重试。"
+        }
+        isLoading = false
+    }
+
+    @MainActor
+    private func saveCover(_ image: UIImage, for book: Book) async -> Bool {
+        guard let data = image.jpegData(compressionQuality: 0.82) else { return false }
+        do {
+            try appContainer.fileStorage.saveCover(data, for: book.id)
+            var updated = book
+            updated.coverFileName = "\(book.id).jpg"
+            updated.coverURL = "manual:data-quality-cover"
+            updated.coverHash = Insecure.MD5.hash(data: data).map { String(format: "%02hhx", $0) }.joined()
+            _ = try await appContainer.bookRepo.update(updated)
+            books.removeAll { $0.id == book.id }
+            await onUpdate()
+            return true
+        } catch {
+            print("Failed to save missing cover: \(error)")
+            return false
+        }
+    }
+}
+
+private struct MissingCoverBookRow: View {
+    let book: Book
+    let onUpdateCover: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            coverPlaceholder
+                .frame(width: 54, height: 76)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(book.title)
+                    .font(.headline)
+                    .lineLimit(2)
+
+                if let authors = decodeNames(book.authorsJSON), !authors.isEmpty {
+                    Text(authors.joined(separator: " / "))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                HStack(spacing: 8) {
+                    if let isbn = book.isbn13 ?? book.isbn10 {
+                        Label(isbn, systemImage: "barcode")
+                    } else {
+                        Label("无 ISBN", systemImage: "barcode.viewfinder")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            Button("更新") {
+                onUpdateCover()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var coverPlaceholder: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.orange.opacity(0.12))
+            VStack(spacing: 6) {
+                Image(systemName: "book.closed")
+                    .font(.title3)
+                Text("缺封面")
+                    .font(.caption2.weight(.semibold))
+            }
+            .foregroundStyle(.orange)
+        }
+    }
+
+    private func decodeNames(_ json: String?) -> [String]? {
+        guard let json,
+              let data = json.data(using: .utf8),
+              let names = try? JSONDecoder().decode([String].self, from: data) else {
+            return nil
+        }
+        return names
     }
 }
 

@@ -397,7 +397,7 @@ struct BookDetailView: View {
 
 // MARK: - Cover Editor
 
-private struct CoverEditorSheet: View {
+struct CoverEditorSheet: View {
     let book: Book
     let onSave: (UIImage) async -> Bool
 

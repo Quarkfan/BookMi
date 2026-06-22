@@ -3,7 +3,7 @@ import GRDB
 
 // MARK: - Book Model
 
-struct Book: Codable, FetchableRecord, MutablePersistableRecord {
+struct Book: Codable, Identifiable, FetchableRecord, MutablePersistableRecord {
     static let databaseTableName = "books"
 
     var id: String

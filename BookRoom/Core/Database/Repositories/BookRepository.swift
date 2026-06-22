@@ -225,6 +225,16 @@ final class BookRepository {
         }
     }
 
+    func fetchMissingCovers() async throws -> [Book] {
+        try await dbQueue.read { (db: Database) in
+            try Book
+                .filter(Column("deleted_at") == nil)
+                .filter(Column("cover_file_name") == nil)
+                .order(Column("created_at").desc)
+                .fetchAll(db)
+        }
+    }
+
     func countMissingShelf() async throws -> Int {
         try await dbQueue.read { (db: Database) in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM books WHERE deleted_at IS NULL AND shelf_id IS NULL") ?? 0
